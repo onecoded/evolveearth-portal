@@ -1,0 +1,3035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="evolve-unified-theme.css" />
+<script src="refineme-widget.js" defer></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MomentumFlow — Footprint Trail HUD</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #04050f;
+  --panel:  rgba(8, 10, 22, 0.96);
+  --border: rgba(28, 32, 68, 0.8);
+  --buy:    #00e5a0;
+  --sell:   #ff3366;
+  --flat:   #4a5580;
+  --dim:    #6b75a8;
+  --bright: #dde4ff;
+  --gold:   #ffcc44;
+  --warn:   #ff8c00;
+  --mono:   'JetBrains Mono', 'Courier New', monospace;
+  --sans:   'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--dim);
+  font-family: var(--sans);
+  width: 100vw; height: 100vh;
+  display: grid;
+  grid-template-rows: 56px 1fr 80px;
+  grid-template-columns: 1fr 284px;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── HEADER ── */
+header {
+  grid-column: 1 / -1;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 20px; gap: 20px;
+  backdrop-filter: blur(20px);
+  z-index: 10;
+}
+
+.logo {
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 4px; text-transform: uppercase;
+  color: var(--bright);
+  display: flex; align-items: center; gap: 8px;
+}
+.logo-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--buy);
+  box-shadow: 0 0 10px var(--buy);
+  animation: pulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes pulse { from { opacity:1; transform:scale(1); } to { opacity:0.3; transform:scale(0.6); } }
+
+.price-main {
+  font-family: var(--mono);
+  font-size: 26px; font-weight: 700;
+  color: var(--bright);
+  letter-spacing: -1px;
+}
+.price-delta {
+  font-size: 12px; font-weight: 600;
+  padding: 4px 10px; border-radius: 20px;
+  transition: all 0.3s;
+}
+.price-delta.up   { background: rgba(0,229,160,0.15); color: var(--buy); }
+.price-delta.down { background: rgba(255,51,102,0.15); color: var(--sell); }
+
+.phase-badge {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 3px; text-transform: uppercase;
+  padding: 5px 14px; border-radius: 20px;
+  border: 1px solid; transition: all 0.4s;
+}
+.phase-badge.BULL { color: var(--buy);  border-color: rgba(0,229,160,0.5); background: rgba(0,229,160,0.08); text-shadow: 0 0 12px var(--buy); }
+.phase-badge.BEAR { color: var(--sell); border-color: rgba(255,51,102,0.5); background: rgba(255,51,102,0.08); text-shadow: 0 0 12px var(--sell); }
+.phase-badge.FLAT { color: var(--flat); border-color: rgba(74,85,128,0.4);  background: rgba(74,85,128,0.06); }
+
+.hdr-btns { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.hdr-btn {
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 2px; text-transform: uppercase;
+  padding: 5px 14px; border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent; color: var(--dim);
+  cursor: pointer; transition: all 0.2s;
+}
+.hdr-btn:hover  { border-color: var(--bright); color: var(--bright); }
+.hdr-btn.active { border-color: var(--warn); color: var(--warn); }
+.hdr-btn.preset { border-color: rgba(168,85,247,0.4); color: #a855f7; }
+.hdr-btn.preset:hover { background: rgba(168,85,247,0.1); }
+
+/* Live toggle button */
+.hdr-btn.live-btn { border-color: rgba(0,229,160,0.4); color: var(--buy); }
+.hdr-btn.live-btn:hover { background: rgba(0,229,160,0.1); }
+.hdr-btn.live-btn.live-active { background: rgba(0,229,160,0.15); border-color: var(--buy); color: var(--buy); }
+
+/* Live indicator dot */
+.live-indicator {
+  display: none; align-items: center; gap: 5px;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--buy);
+}
+.live-indicator.visible { display: flex; }
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--buy);
+  box-shadow: 0 0 8px var(--buy);
+  animation: livePulse 1s ease-in-out infinite;
+}
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--buy); }
+  50%       { opacity: 0.4; box-shadow: 0 0 3px var(--buy); }
+}
+
+/* Coin input */
+.coin-input-wrap {
+  display: none; align-items: center; gap: 4px;
+  font-size: 9px; color: var(--dim);
+}
+.coin-input-wrap.visible { display: flex; }
+.coin-input {
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  background: rgba(28,32,68,0.5); color: var(--bright);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 3px 6px; width: 52px; text-transform: uppercase;
+  outline: none;
+}
+.coin-input:focus { border-color: var(--buy); }
+
+.pair-label {
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--dim); opacity: 0.5;
+}
+.pyth-badge {
+  color: #a855f7;
+  text-shadow: 0 0 10px rgba(168,85,247,0.7);
+  font-weight: 700;
+}
+
+/* ── MAIN CHART ── */
+#chartWrap {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+#chart { display: block; }
+
+/* Floating HUD elements on chart */
+.hud-corner {
+  position: absolute;
+  top: 16px; left: 16px;
+  display: flex; flex-direction: column; gap: 4px;
+  pointer-events: none;
+}
+.hud-stat {
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 1px; text-transform: uppercase;
+  opacity: 0.6;
+}
+.hud-stat span { opacity: 1; }
+
+/* ── CONTROL PANEL ── */
+#panel {
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  overflow-y: auto; overflow-x: hidden;
+  padding: 16px 14px;
+  display: flex; flex-direction: column; gap: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  grid-row: 2;
+}
+#panel::-webkit-scrollbar { width: 4px; }
+#panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.panel-section { margin-bottom: 4px; }
+
+.panel-section-hdr {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 3px; text-transform: uppercase;
+  color: var(--dim); opacity: 0.5;
+  padding: 10px 0 6px;
+  border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  cursor: pointer;
+}
+.panel-section-hdr:first-child { border-top: none; padding-top: 0; }
+.panel-section-hdr .toggle-icon { font-size: 8px; opacity: 0.5; transition: transform 0.2s; }
+.panel-section-hdr.collapsed .toggle-icon { transform: rotate(-90deg); }
+.panel-section-body { display: flex; flex-direction: column; gap: 2px; }
+.panel-section-body.collapsed { display: none; }
+
+/* Preset buttons */
+.preset-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.preset-btn {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 7px 4px; border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent; color: var(--dim);
+  cursor: pointer; transition: all 0.2s; text-align: center;
+}
+.preset-btn:hover { color: var(--bright); border-color: var(--bright); }
+.preset-btn.active { background: rgba(0,229,160,0.1); border-color: var(--buy); color: var(--buy); }
+
+/* Knob row */
+.knob {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 6px 0;
+}
+.knob-row {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.knob-label {
+  font-size: 10px; color: var(--dim); opacity: 0.8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 150px;
+}
+.knob-val {
+  font-family: var(--mono);
+  font-size: 10px; font-weight: 600;
+  color: var(--bright); min-width: 48px; text-align: right;
+}
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%; height: 3px;
+  background: var(--border); border-radius: 2px; outline: none;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--bright);
+  box-shadow: 0 0 6px rgba(221,228,255,0.5);
+  transition: transform 0.1s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+input[type=range]::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--bright); border: none;
+}
+
+/* Toggle knobs */
+.knob-toggle {
+  display: flex; gap: 4px;
+}
+.tog-btn {
+  flex: 1; font-size: 9px; font-weight: 600;
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 4px 2px; border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent; color: var(--dim);
+  cursor: pointer; text-align: center; transition: all 0.15s;
+}
+.tog-btn.active { background: rgba(221,228,255,0.08); border-color: var(--bright); color: var(--bright); }
+
+/* ── FOOTER ── */
+footer {
+  grid-column: 1 / -1;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 20px; gap: 32px;
+}
+
+.foot-metric { display: flex; flex-direction: column; gap: 2px; min-width: 80px; }
+.foot-label {
+  font-size: 8px; font-weight: 600;
+  letter-spacing: 2px; text-transform: uppercase; opacity: 0.4;
+}
+.foot-val {
+  font-family: var(--mono);
+  font-size: 20px; font-weight: 700;
+  color: var(--bright); transition: color 0.3s;
+}
+.foot-val.pos { color: var(--buy); }
+.foot-val.neg { color: var(--sell); }
+.foot-val.warn { color: var(--warn); animation: flashWarn 0.5s ease-in-out infinite alternate; }
+@keyframes flashWarn { from { opacity:1; } to { opacity:0.4; } }
+
+/* Momentum velocity bar */
+.vel-wrap { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.vel-label { font-size: 8px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; opacity: 0.4; }
+.vel-track {
+  height: 8px; background: rgba(255,255,255,0.04);
+  border-radius: 4px; overflow: hidden;
+  position: relative;
+}
+.vel-center {
+  position: absolute; left: 50%; top: 0;
+  width: 1px; height: 100%;
+  background: rgba(255,255,255,0.15);
+}
+.vel-fill {
+  position: absolute; top: 0; height: 100%;
+  border-radius: 4px;
+  transition: all 0.25s ease;
+}
+
+/* order book mini tape */
+.tape-wrap { width: 120px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+.tape-row {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 9px;
+  padding: 1px 4px; border-radius: 2px;
+  animation: tapein 0.1s ease-out;
+}
+@keyframes tapein { from { opacity:0; transform: translateX(-6px); } to { opacity:1; transform:none; } }
+.tape-row.buy { color: var(--buy); background: rgba(0,229,160,0.06); }
+.tape-row.sell { color: var(--sell); background: rgba(255,51,102,0.06); }
+
+/* ── LOGIN OVERLAY ── */
+#loginOverlay {
+  position:fixed;inset:0;z-index:200;
+  background:radial-gradient(ellipse at 20% 30%, rgba(0,229,160,0.08) 0%, transparent 50%),
+             radial-gradient(ellipse at 80% 70%, rgba(168,85,247,0.08) 0%, transparent 50%),
+             #04050f;
+  display:flex;align-items:center;justify-content:center;gap:60px;
+  overflow:hidden;
+}
+#loginOverlay.hidden{display:none;}
+.login-left {
+  display:flex;flex-direction:column;gap:24px;max-width:320px;
+}
+.login-hero-title {
+  font-size:48px;font-weight:900;color:var(--bright);letter-spacing:-2px;line-height:1;
+}
+.login-hero-title span { color:var(--buy);text-shadow:0 0 30px var(--buy); }
+.login-hero-sub { font-size:14px;color:var(--dim);opacity:0.7;line-height:1.6; }
+.login-stats-row { display:flex;gap:20px; }
+.login-stat { display:flex;flex-direction:column;gap:3px; }
+.login-stat-val { font-family:var(--mono);font-size:20px;font-weight:700;color:var(--bright); }
+.login-stat-lbl { font-size:9px;letter-spacing:2px;text-transform:uppercase;opacity:0.4; }
+.login-box {
+  background:rgba(8,10,22,0.9);
+  border:1px solid rgba(28,32,68,0.9);
+  border-radius:20px;padding:36px 32px;width:360px;
+  display:flex;flex-direction:column;gap:16px;
+  box-shadow:0 24px 80px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.04);
+  backdrop-filter:blur(20px);
+}
+.login-form-title { font-size:20px;font-weight:800;color:var(--bright);text-align:center; }
+.login-form-sub { font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);opacity:0.45;text-align:center;margin-top:-8px; }
+.login-input {
+  background:rgba(255,255,255,0.04);border:1px solid rgba(28,32,68,0.9);border-radius:10px;
+  padding:12px 16px;color:var(--bright);font-size:14px;font-family:var(--sans);outline:none;
+  transition:all 0.2s;width:100%;
+}
+.login-input:focus { border-color:var(--buy);background:rgba(0,229,160,0.04);box-shadow:0 0 0 3px rgba(0,229,160,0.08); }
+.login-input::placeholder { color:var(--dim);opacity:0.35; }
+.login-btn-row { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+.login-btn {
+  font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  padding:13px;border-radius:10px;border:none;cursor:pointer;transition:all 0.2s;
+  position:relative;overflow:hidden;
+}
+.login-btn::after { content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.08) 0%,transparent 60%); }
+.login-btn.primary { background:linear-gradient(135deg,#005c36,#00b87a);color:#fff;box-shadow:0 6px 20px rgba(0,229,160,0.35); }
+.login-btn.primary:hover { box-shadow:0 8px 28px rgba(0,229,160,0.6);transform:translateY(-1px); }
+.login-btn.secondary { background:rgba(255,255,255,0.04);border:1px solid rgba(28,32,68,0.9);color:var(--dim); }
+.login-btn.secondary:hover { border-color:var(--bright);color:var(--bright); }
+.login-err { font-size:11px;color:var(--sell);text-align:center;min-height:16px; }
+.login-divider { display:flex;align-items:center;gap:10px;font-size:9px;opacity:0.3;text-transform:uppercase;letter-spacing:2px; }
+.login-divider::before,.login-divider::after { content:'';flex:1;height:1px;background:var(--border); }
+.login-top-traders { display:flex;flex-direction:column;gap:6px; }
+.login-top-row {
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:11px;padding:6px 10px;border-radius:8px;
+  background:rgba(255,255,255,0.02);border:1px solid rgba(28,32,68,0.5);
+}
+.login-top-name { font-weight:600;color:var(--bright); }
+.login-top-bal { font-family:var(--mono);font-size:10px;color:var(--buy); }
+
+/* ── BATTLE DOCK ── */
+#battleDock {
+  position: absolute;
+  top: 18px; left: 18px;
+  width: 210px;
+  background: rgba(6,7,18,0.92);
+  border: 1px solid rgba(28,32,68,0.9);
+  border-radius: 14px; padding: 14px;
+  backdrop-filter: blur(24px);
+  display: flex; flex-direction: column; gap: 8px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+  z-index: 20;
+}
+.battle-title {
+  font-size: 9px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--dim); opacity: 0.5; text-align: center;
+}
+.battle-input {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 10px; color: var(--bright); font-size: 12px;
+  font-family: var(--mono); text-transform: uppercase; outline: none; width: 100%;
+  letter-spacing: 2px;
+}
+.battle-input:focus { border-color: rgba(168,85,247,0.7); }
+.battle-btn {
+  width: 100%; font-size: 10px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  padding: 9px; border-radius: 7px; border: none; cursor: pointer; transition: all 0.18s;
+}
+.battle-btn.create {
+  background: linear-gradient(135deg,#2d0060,#7c3aed);
+  color:#fff; box-shadow:0 4px 16px rgba(124,58,237,0.3);
+}
+.battle-btn.create:hover { box-shadow:0 6px 24px rgba(124,58,237,0.6); transform:translateY(-1px); }
+.battle-btn.join {
+  background: linear-gradient(135deg,#1a3a6b,#2563eb);
+  color:#fff; box-shadow:0 4px 14px rgba(37,99,235,0.3);
+}
+.battle-btn.join:hover { box-shadow:0 6px 22px rgba(37,99,235,0.55); transform:translateY(-1px); }
+.battle-btn.end {
+  background: linear-gradient(135deg,#4a0015,#cc1144);
+  color:#fff; box-shadow:0 4px 14px rgba(255,51,102,0.3);
+}
+
+/* Battle status + opponent panel */
+.battle-room-code {
+  font-family: var(--mono); font-size: 20px; font-weight: 900;
+  color: #a855f7; text-align: center; letter-spacing: 4px;
+  text-shadow: 0 0 16px #a855f7;
+}
+.battle-status {
+  font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+  text-align: center; opacity: 0.5;
+}
+.opp-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.opp-name { font-weight: 700; color: var(--bright); }
+.opp-pnl { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.opp-pnl.pos { color: var(--buy); }
+.opp-pnl.neg { color: var(--sell); }
+.opp-roe { font-family: var(--mono); font-size: 10px; opacity: 0.6; }
+.vs-divider {
+  display: flex; align-items: center; gap: 6px; font-size: 10px;
+  color: var(--dim); opacity: 0.4;
+}
+.vs-divider::before,.vs-divider::after {
+  content:''; flex:1; height:1px; background:var(--border);
+}
+
+/* Battle result modal */
+#battleResultModal {
+  display: none; position: fixed; inset: 0; z-index: 300;
+  align-items: center; justify-content: center;
+  background: rgba(4,5,15,0.88); backdrop-filter: blur(16px);
+}
+#battleResultModal.visible { display: flex; }
+.battle-result-box {
+  background: rgba(8,10,22,0.99);
+  border-radius: 20px; padding: 40px 36px;
+  width: 360px; text-align: center;
+  display: flex; flex-direction: column; gap: 16px;
+  animation: popIn 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes popIn { from{transform:scale(0.7);opacity:0} to{transform:scale(1);opacity:1} }
+.br-title { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; opacity: 0.5; }
+.br-winner { font-size: 28px; font-weight: 900; color: var(--buy); text-shadow: 0 0 20px var(--buy); }
+.br-prize  { font-family: var(--mono); font-size: 40px; font-weight: 900; color: var(--gold); text-shadow: 0 0 24px var(--gold); }
+.br-sub    { font-size: 11px; opacity: 0.5; }
+.br-scores { display: flex; justify-content: space-around; padding: 12px 0; border-top: 1px solid var(--border); }
+.br-score  { display: flex; flex-direction: column; gap: 4px; }
+.br-score-name { font-size: 10px; opacity: 0.5; }
+.br-score-val  { font-family: var(--mono); font-weight: 700; font-size: 16px; }
+
+/* Balance in header */
+.hdr-balance {
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: var(--buy); padding: 4px 12px; border-radius: 20px;
+  background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2);
+}
+.hdr-user {
+  font-size: 10px; letter-spacing: 1px; color: var(--dim);
+  opacity: 0.7; display: flex; align-items: center; gap: 6px;
+}
+
+/* ── TRADE DOCK ── */
+#tradeDock {
+  position: absolute;
+  bottom: 18px; left: 18px;
+  width: 230px;
+  background: rgba(6, 7, 18, 0.92);
+  border: 1px solid rgba(28,32,68,0.9);
+  border-radius: 14px;
+  padding: 16px;
+  backdrop-filter: blur(24px);
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+  z-index: 20;
+}
+.dock-title {
+  font-size: 9px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--dim); opacity: 0.5; text-align: center;
+}
+
+/* Leverage slider */
+.lev-wrap { display: flex; flex-direction: column; gap: 5px; }
+.lev-row   { display: flex; justify-content: space-between; align-items: baseline; }
+.lev-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.45; }
+.lev-val {
+  font-family: var(--mono); font-size: 18px; font-weight: 900;
+  color: var(--bright); transition: color 0.3s;
+  text-shadow: 0 0 12px currentColor;
+}
+.lev-val.low  { color: var(--buy); }
+.lev-val.mid  { color: var(--gold); }
+.lev-val.high { color: var(--warn); }
+.lev-val.max  { color: var(--sell); animation: flashWarn 0.4s infinite alternate; }
+
+/* Custom leverage track */
+.lev-track-wrap { position: relative; height: 10px; }
+#levSlider {
+  -webkit-appearance: none;
+  width: 100%; height: 10px; border-radius: 5px;
+  background: linear-gradient(to right,
+    rgba(0,229,160,0.7) 0%,
+    rgba(255,204,68,0.7) 40%,
+    rgba(255,140,0,0.7)  70%,
+    rgba(255,51,102,0.9) 100%);
+  outline: none; cursor: pointer;
+}
+#levSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bright);
+  border: 2px solid rgba(255,255,255,0.3);
+  box-shadow: 0 0 14px rgba(255,255,255,0.6), 0 2px 6px rgba(0,0,0,0.5);
+  cursor: pointer; transition: transform 0.1s, box-shadow 0.2s;
+}
+#levSlider::-webkit-slider-thumb:hover { transform: scale(1.25); box-shadow: 0 0 22px rgba(255,255,255,0.9); }
+.lev-ticks {
+  display: flex; justify-content: space-between;
+  font-size: 8px; opacity: 0.3; font-family: var(--mono);
+  margin-top: 3px;
+}
+
+/* Size row */
+.size-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10px;
+}
+.size-label { opacity: 0.4; letter-spacing: 1px; text-transform: uppercase; font-size: 9px; }
+.size-val { font-family: var(--mono); font-weight: 600; color: var(--bright); }
+
+/* Long / Short buttons */
+.trade-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.trade-btn {
+  font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+  padding: 10px 4px; border-radius: 8px; border: none;
+  cursor: pointer; transition: all 0.18s;
+  position: relative; overflow: hidden;
+}
+.trade-btn::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 60%);
+  border-radius: inherit;
+}
+.trade-btn:active { transform: scale(0.96); }
+.long-btn {
+  background: linear-gradient(135deg, #007a54 0%, #00b87a 100%);
+  color: #fff; box-shadow: 0 4px 16px rgba(0,229,160,0.3);
+}
+.long-btn:hover { box-shadow: 0 6px 24px rgba(0,229,160,0.55); transform: translateY(-1px); }
+.short-btn {
+  background: linear-gradient(135deg, #8c0026 0%, #d42055 100%);
+  color: #fff; box-shadow: 0 4px 16px rgba(255,51,102,0.3);
+}
+.short-btn:hover { box-shadow: 0 6px 24px rgba(255,51,102,0.55); transform: translateY(-1px); }
+.trade-btn:disabled { opacity: 0.25; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* P&L display */
+#pnlPanel {
+  display: none; flex-direction: column; gap: 6px;
+  border-top: 1px solid var(--border); padding-top: 10px;
+}
+#pnlPanel.visible { display: flex; }
+.pnl-row { display: flex; justify-content: space-between; font-size: 10px; }
+.pnl-key  { opacity: 0.4; letter-spacing: 1px; text-transform: uppercase; font-size: 9px; }
+.pnl-num  { font-family: var(--mono); font-weight: 700; font-size: 13px; }
+.pnl-num.pos { color: var(--buy);  text-shadow: 0 0 10px var(--buy); }
+.pnl-num.neg { color: var(--sell); text-shadow: 0 0 10px var(--sell); }
+.pnl-roe { font-size: 22px; font-weight: 900; font-family: var(--mono); text-align: center; margin: 2px 0; }
+.pnl-roe.pos { color: var(--buy); }
+.pnl-roe.neg { color: var(--sell); animation: flashWarn 0.5s infinite alternate; }
+
+/* Close button */
+#closeBtn {
+  display: none; width: 100%;
+  font-size: 11px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase;
+  padding: 11px; border-radius: 8px; border: none;
+  background: linear-gradient(135deg, #4a0015 0%, #cc1144 100%);
+  color: #fff; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(255,51,102,0.4);
+  transition: all 0.18s; position: relative; overflow: hidden;
+}
+#closeBtn::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 60%);
+}
+#closeBtn.visible { display: block; }
+#closeBtn:hover { box-shadow: 0 6px 30px rgba(255,51,102,0.7); transform: translateY(-1px); }
+#closeBtn:active { transform: scale(0.97); }
+
+/* ── ANIMATED BACKGROUND BLOBS ── */
+.bg-blob {
+  position: fixed; border-radius: 50%;
+  filter: blur(100px); opacity: 0.07; pointer-events: none; z-index: 0;
+  animation: blobDrift ease-in-out infinite alternate;
+}
+.blob-1 { width:500px;height:500px;background:#00e5a0;top:-150px;left:-150px;animation-duration:18s; }
+.blob-2 { width:400px;height:400px;background:#a855f7;bottom:-100px;right:-100px;animation-duration:22s; }
+.blob-3 { width:300px;height:300px;background:#ff3366;top:40%;right:25%;animation-duration:15s; }
+@keyframes blobDrift {
+  from { transform: translate(0,0) scale(1); }
+  to   { transform: translate(40px,-40px) scale(1.08); }
+}
+
+:root {
+  --rank-rekt:   #6b7280;
+  --rank-rookie: #cd7f32;
+  --rank-trader: #c0c0c0;
+  --rank-pro:    #ffd700;
+  --rank-elite:  #60a5fa;
+  --rank-legend: #a855f7;
+}
+.rank-REKT   { color:var(--rank-rekt);   border-color:var(--rank-rekt);   }
+.rank-ROOKIE { color:var(--rank-rookie); border-color:var(--rank-rookie); }
+.rank-TRADER { color:var(--rank-trader); border-color:var(--rank-trader); }
+.rank-PRO    { color:var(--rank-pro);    border-color:var(--rank-pro);    box-shadow:0 0 12px rgba(255,215,0,0.3); }
+.rank-ELITE  { color:var(--rank-elite);  border-color:var(--rank-elite);  box-shadow:0 0 12px rgba(96,165,250,0.3); }
+.rank-LEGEND { color:var(--rank-legend); border-color:var(--rank-legend); box-shadow:0 0 20px rgba(168,85,247,0.5); animation:legendPulse 2s ease-in-out infinite; }
+@keyframes legendPulse { 0%,100%{box-shadow:0 0 20px rgba(168,85,247,0.5)} 50%{box-shadow:0 0 35px rgba(168,85,247,0.9)} }
+
+.xp-section { display:flex;align-items:center;gap:10px; }
+.rank-badge {
+  font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
+  padding:4px 10px;border-radius:20px;border:1px solid;white-space:nowrap;
+  transition:all 0.4s;
+}
+.xp-wrap { display:flex;flex-direction:column;gap:3px;min-width:100px; }
+.xp-labels { display:flex;justify-content:space-between;font-size:8px;opacity:0.5;font-family:var(--mono); }
+.xp-track { height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden; }
+.xp-fill { height:100%;border-radius:2px;background:linear-gradient(90deg,#a855f7,#60a5fa);transition:width 0.8s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 0 8px rgba(168,85,247,0.6); }
+
+#achievementContainer { position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:50;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none; }
+.ach-toast {
+  display:flex;align-items:center;gap:12px;
+  background:rgba(8,10,22,0.96);border:1px solid rgba(168,85,247,0.5);
+  border-radius:12px;padding:12px 16px;min-width:260px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.5),0 0 20px rgba(168,85,247,0.2);
+  opacity:0;transform:translateY(-16px) scale(0.95);
+  transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.ach-toast.show { opacity:1;transform:translateY(0) scale(1); }
+.ach-icon { font-size:22px;flex-shrink:0; }
+.ach-body { flex:1; }
+.ach-title { font-size:12px;font-weight:700;color:var(--bright);letter-spacing:0.5px; }
+.ach-desc  { font-size:10px;color:var(--dim);margin-top:2px; }
+.ach-xp { font-family:var(--mono);font-size:13px;font-weight:800;color:#a855f7;white-space:nowrap; }
+
+.vs-meter { display:flex;align-items:center;gap:8px;margin:4px 0; }
+.vs-me-label,.vs-opp-label { font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;white-space:nowrap; }
+.vs-me-label  { color:var(--buy); }
+.vs-opp-label { color:var(--sell); }
+.vs-bar-track { flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden;position:relative;display:flex; }
+.vs-bar-me  { height:100%;background:linear-gradient(90deg,#005c36,#00e5a0);transition:width 0.5s ease;border-radius:4px 0 0 4px; }
+.vs-bar-opp { height:100%;background:linear-gradient(90deg,#cc1144,#ff3366);transition:width 0.5s ease;border-radius:0 4px 4px 0; }
+.vs-center-dot { position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:3px;height:12px;background:rgba(255,255,255,0.3);border-radius:2px; }
+
+.foot-card {
+  background:rgba(255,255,255,0.03);border:1px solid rgba(28,32,68,0.6);
+  border-radius:10px;padding:8px 14px;display:flex;flex-direction:column;gap:2px;min-width:80px;
+}
+
+/* ── LEADERBOARD MODAL ── */
+#lbModal {
+  display:none;position:fixed;inset:0;z-index:250;
+  align-items:center;justify-content:center;
+  background:rgba(4,5,15,0.85);backdrop-filter:blur(18px);
+}
+#lbModal.visible { display:flex; }
+.lb-box {
+  background:rgba(8,10,22,0.98);border:1px solid rgba(28,32,68,0.9);
+  border-radius:20px;padding:32px 28px;width:420px;
+  display:flex;flex-direction:column;gap:14px;
+  box-shadow:0 24px 80px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.04);
+  animation:popIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.lb-header {
+  display:flex;justify-content:space-between;align-items:center;
+}
+.lb-title {
+  font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;
+  color:var(--bright);
+}
+.lb-close {
+  background:none;border:none;color:var(--dim);cursor:pointer;
+  font-size:18px;line-height:1;opacity:0.5;transition:opacity 0.15s;
+}
+.lb-close:hover { opacity:1; }
+.lb-row {
+  display:grid;grid-template-columns:24px 1fr 80px 60px;gap:8px;align-items:center;
+  padding:8px 10px;border-radius:10px;font-size:11px;
+  background:rgba(255,255,255,0.02);border:1px solid rgba(28,32,68,0.5);
+  transition:background 0.15s;
+}
+.lb-row:hover { background:rgba(255,255,255,0.04); }
+.lb-row.me { border-color:rgba(0,229,160,0.3);background:rgba(0,229,160,0.04); }
+.lb-rank { font-family:var(--mono);font-weight:700;color:var(--dim);text-align:center; }
+.lb-name { font-weight:600;color:var(--bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.lb-bal  { font-family:var(--mono);font-weight:700;color:var(--buy);text-align:right; }
+.lb-badge{ font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 6px;border-radius:8px;border:1px solid;text-align:center; }
+.lb-cols {
+  display:grid;grid-template-columns:24px 1fr 80px 60px;gap:8px;
+  font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  opacity:0.35;padding:0 10px 4px;
+}
+.lb-loading { text-align:center;opacity:0.4;font-size:12px;padding:20px 0; }
+
+/* Flash result overlay */
+#tradeResult {
+  display: none; position: absolute; inset: 0;
+  border-radius: 14px; align-items: center; justify-content: center;
+  flex-direction: column; gap: 4px;
+  animation: fadeResult 1.8s ease-out forwards;
+  z-index: 30;
+}
+#tradeResult.win  { display: flex; background: rgba(0,80,50,0.92); border: 1px solid var(--buy); }
+#tradeResult.loss { display: flex; background: rgba(80,0,20,0.92); border: 1px solid var(--sell); }
+@keyframes fadeResult { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0; pointer-events:none;} }
+.result-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; opacity: 0.7; }
+.result-amount { font-family: var(--mono); font-size: 28px; font-weight: 900; }
+.result-amount.pos { color: var(--buy); }
+.result-amount.neg { color: var(--sell); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay">
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+  <div class="bg-blob blob-3"></div>
+
+  <div class="login-left">
+    <div>
+      <div class="login-hero-title">Momentum<br><span>Flow</span></div>
+      <div class="login-hero-sub" style="margin-top:12px">Real-time order flow trading.<br>Battle friends. Win their profits.</div>
+    </div>
+    <div class="login-stats-row">
+      <div class="login-stat"><div class="login-stat-val">50×</div><div class="login-stat-lbl">Max Leverage</div></div>
+      <div class="login-stat"><div class="login-stat-val">$10K</div><div class="login-stat-lbl">Starting Balance</div></div>
+      <div class="login-stat"><div class="login-stat-val">Live</div><div class="login-stat-lbl">Hyperliquid</div></div>
+    </div>
+    <div>
+      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;opacity:0.4;margin-bottom:8px;">Top Traders</div>
+      <div class="login-top-traders" id="loginLeaderboard">
+        <div class="login-top-row"><span class="login-top-name">—</span><span class="login-top-bal">Loading…</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="login-box">
+    <div class="login-form-title">⬡ Enter Arena</div>
+    <div class="login-form-sub">Trade · Battle · Dominate</div>
+    <input class="login-input" id="loginUser" placeholder="Username" autocomplete="off">
+    <input class="login-input" id="loginPass" placeholder="Password" type="password" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="login-btn-row">
+      <button class="login-btn primary" onclick="doLogin()">Login</button>
+      <button class="login-btn secondary" onclick="doRegister()">Register</button>
+    </div>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-divider">or</div>
+    <button class="login-btn secondary" style="width:100%;text-align:center" onclick="playAsGuest()">Play as Guest</button>
+  </div>
+</div>
+
+<!-- BATTLE RESULT MODAL -->
+<div id="battleResultModal">
+  <div class="battle-result-box" id="battleResultBox"></div>
+</div>
+
+<!-- LEADERBOARD MODAL -->
+<div id="lbModal">
+  <div class="lb-box">
+    <div class="lb-header">
+      <div class="lb-title">🏆 Leaderboard</div>
+      <button class="lb-close" onclick="closeLb()">✕</button>
+    </div>
+    <div class="lb-cols">
+      <span>#</span><span>Trader</span><span style="text-align:right">Balance</span><span style="text-align:center">Rank</span>
+    </div>
+    <div id="lbRows"><div class="lb-loading">Loading…</div></div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo"><div class="logo-dot"></div>MomentumFlow</div>
+  <div class="pair-label" id="pairLabel">BTC-PERP · SIM</div>
+  <div class="hdr-user" id="hdrUser" style="display:none">
+    <span id="hdrUsername">—</span>
+    <span style="opacity:0.3">|</span>
+    <span class="hdr-balance" id="hdrBalance">$10,000</span>
+  </div>
+  <div class="xp-section" id="xpSection" style="display:none">
+    <div class="rank-badge rank-ROOKIE" id="rankBadge">ROOKIE</div>
+    <div class="xp-wrap">
+      <div class="xp-labels">
+        <span id="xpLevel">Lv.1</span>
+        <span id="xpText">0 / 100 XP</span>
+      </div>
+      <div class="xp-track"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+    </div>
+  </div>
+  <div class="price-main" id="hPrice">$94,231.50</div>
+  <div class="price-delta up" id="hDelta">▲ +$142.30</div>
+  <div class="phase-badge BULL" id="hPhase">↑ Bull Momentum</div>
+  <div class="hdr-btns">
+    <div class="live-indicator" id="liveIndicator">
+      <div class="live-dot"></div>LIVE
+    </div>
+    <div class="coin-input-wrap" id="coinWrap">
+      <span style="opacity:0.4;font-size:9px;">COIN</span>
+      <input class="coin-input" id="coinInput" value="BTC" maxlength="10"
+             onchange="changeCoin(this.value)" onkeydown="if(event.key==='Enter')changeCoin(this.value)">
+    </div>
+    <button class="hdr-btn live-btn" id="liveToggleBtn" onclick="toggleLiveMode()">📡 Go Live</button>
+    <button class="hdr-btn preset" onclick="applyPreset('sensitive')">Sensitive</button>
+    <button class="hdr-btn preset" onclick="applyPreset('balanced')">Balanced</button>
+    <button class="hdr-btn preset" onclick="applyPreset('filtered')">Filtered</button>
+    <button class="hdr-btn" onclick="openLb()" style="border-color:rgba(255,204,68,0.4);color:#ffcc44;">🏆 Board</button>
+    <button class="hdr-btn active" id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
+  </div>
+</header>
+
+<!-- CHART -->
+<div id="chartWrap">
+  <canvas id="chart"></canvas>
+  <div class="hud-corner">
+    <div class="hud-stat">Velocity <span id="hudVel">+2.40</span> pts/s</div>
+    <div class="hud-stat">Accel <span id="hudAcc">+0.82</span></div>
+    <div class="hud-stat">Delta <span id="hudDelta">+644</span> lots</div>
+  </div>
+
+  <div id="achievementContainer"></div>
+
+  <!-- BATTLE DOCK -->
+  <div id="battleDock">
+    <div class="battle-title">⚔️ Battle Arena</div>
+    <!-- Lobby (no active battle) -->
+    <div id="battleLobby">
+      <button class="battle-btn create" onclick="createBattle()">+ Create Battle</button>
+      <div style="display:flex;gap:6px;margin-top:2px;">
+        <input class="battle-input" id="joinCodeInput" placeholder="ROOM CODE" maxlength="6">
+        <button class="battle-btn join" style="width:auto;padding:9px 12px;flex-shrink:0" onclick="joinBattle()">Join</button>
+      </div>
+    </div>
+    <!-- Waiting for opponent -->
+    <div id="battleWaiting" style="display:none;flex-direction:column;gap:8px;">
+      <div class="battle-status">Share this code:</div>
+      <div class="battle-room-code" id="battleRoomCode">—</div>
+      <div class="battle-status" id="battleStatusMsg">Waiting for opponent…</div>
+    </div>
+    <!-- Active battle -->
+    <div id="battleActive" style="display:none;flex-direction:column;gap:8px;">
+      <div class="opp-row">
+        <span class="opp-name" id="oppName">—</span>
+        <span style="font-size:9px;opacity:0.4;letter-spacing:1px;">OPPONENT</span>
+      </div>
+      <div class="vs-meter">
+        <span class="vs-me-label">YOU</span>
+        <div class="vs-bar-track">
+          <div class="vs-bar-me"  id="vsMeBar"  style="width:50%"></div>
+          <div class="vs-bar-opp" id="vsOppBar" style="width:50%"></div>
+          <div class="vs-center-dot"></div>
+        </div>
+        <span class="vs-opp-label">OPP</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <span style="font-size:8px;opacity:0.4;letter-spacing:1px;text-transform:uppercase">You</span>
+          <span class="opp-pnl pos" id="myBattlePnl">$0.00</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:1px;text-align:right">
+          <span style="font-size:8px;opacity:0.4;letter-spacing:1px;text-transform:uppercase">Opponent</span>
+          <span class="opp-pnl" id="oppPnl">$0.00</span>
+        </div>
+      </div>
+      <div style="font-size:9px;opacity:0.4;letter-spacing:1px;" id="oppSide">No trade open</div>
+      <button class="battle-btn end" onclick="endBattle()">⚡ End Battle</button>
+    </div>
+  </div>
+
+  <!-- TRADE DOCK -->
+  <div id="tradeDock">
+    <div id="tradeResult"></div>
+    <div class="dock-title">⚡ Trade Simulator</div>
+
+    <!-- Leverage -->
+    <div class="lev-wrap">
+      <div class="lev-row">
+        <span class="lev-label">Leverage</span>
+        <span class="lev-val low" id="levDisplay">1×</span>
+      </div>
+      <input type="range" id="levSlider" min="1" max="50" step="1" value="1" oninput="onLevChange(this.value)">
+      <div class="lev-ticks" id="levTicks"><span>1×</span><span>10×</span><span>25×</span><span>50×</span></div>
+    </div>
+
+    <!-- Position size -->
+    <div class="lev-wrap" style="margin-top:2px;">
+      <div class="lev-row">
+        <span class="lev-label">Risk</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--bright)" id="riskPctDisplay">10%</span>
+      </div>
+      <input type="range" id="riskSlider" min="1" max="100" step="1" value="10" oninput="onRiskChange(this.value)"
+             style="background:linear-gradient(to right,rgba(0,229,160,0.6) 0%,rgba(168,85,247,0.8) 100%)">
+      <div class="lev-ticks"><span>1%</span><span>25%</span><span>50%</span><span>100%</span></div>
+    </div>
+    <div class="size-row">
+      <span class="size-label">Size</span>
+      <span class="size-val" id="sizeDisplay">$1,000</span>
+    </div>
+    <div class="size-row" style="margin-top:-6px;">
+      <span class="size-label">Notional</span>
+      <span class="size-val" id="notionalDisplay">$1,000</span>
+    </div>
+
+    <!-- Long / Short -->
+    <div class="trade-btns">
+      <button class="trade-btn long-btn"  id="longBtn"  onclick="openTrade('long')">▲ Long</button>
+      <button class="trade-btn short-btn" id="shortBtn" onclick="openTrade('short')">▼ Short</button>
+    </div>
+
+    <!-- P&L panel (visible when trade open) -->
+    <div id="pnlPanel">
+      <div class="pnl-row"><span class="pnl-key">Side</span><span class="pnl-num" id="tradeSide">—</span></div>
+      <div class="pnl-row"><span class="pnl-key">Entry</span><span class="pnl-num" id="tradeEntry">—</span></div>
+      <div class="pnl-row"><span class="pnl-key">Liq Price</span><span class="pnl-num neg" id="tradeLiq">—</span></div>
+      <div class="pnl-roe pos" id="tradeROE">+0.00%</div>
+      <div class="pnl-row">
+        <span class="pnl-key">P&amp;L</span>
+        <span class="pnl-num pos" id="tradePnl">$0.00</span>
+      </div>
+    </div>
+
+    <!-- Close button -->
+    <button id="closeBtn" onclick="closeTrade()">⚡ Close Trade</button>
+  </div>
+</div>
+
+<!-- CONTROL PANEL -->
+<div id="panel">
+
+  <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;opacity:0.4;padding-bottom:8px;">Presets</div>
+  <div class="preset-row">
+    <button class="preset-btn" id="pre-sensitive" onclick="applyPreset('sensitive')">Sensitive</button>
+    <button class="preset-btn active" id="pre-balanced" onclick="applyPreset('balanced')">Balanced</button>
+    <button class="preset-btn" id="pre-filtered"  onclick="applyPreset('filtered')">Filtered</button>
+  </div>
+
+  <!-- FOOTSTEP -->
+  <div class="panel-section">
+    <div class="panel-section-hdr" onclick="toggleSection(this)">
+      Footstep <span class="toggle-icon">▼</span>
+    </div>
+    <div class="panel-section-body" id="sec-foot">
+      <div id="knobs-foot"></div>
+    </div>
+  </div>
+
+  <!-- TRAIL -->
+  <div class="panel-section">
+    <div class="panel-section-hdr" onclick="toggleSection(this)">
+      Trail <span class="toggle-icon">▼</span>
+    </div>
+    <div class="panel-section-body" id="sec-trail">
+      <div id="knobs-trail"></div>
+      <div class="knob">
+        <div class="knob-row"><span class="knob-label">Trail Width Mode</span></div>
+        <div class="knob-toggle" id="tog-trailWidth">
+          <button class="tog-btn active" onclick="setToggle('trailWidth','velocity',this)">Velocity</button>
+          <button class="tog-btn" onclick="setToggle('trailWidth','volume',this)">Volume</button>
+          <button class="tog-btn" onclick="setToggle('trailWidth','fixed',this)">Fixed</button>
+        </div>
+      </div>
+      <div class="knob">
+        <div class="knob-row"><span class="knob-label">Trail Color Mode</span></div>
+        <div class="knob-toggle" id="tog-trailColor">
+          <button class="tog-btn active" onclick="setToggle('trailColor','simple',this)">Simple</button>
+          <button class="tog-btn" onclick="setToggle('trailColor','heat',this)">Heat</button>
+          <button class="tog-btn" onclick="setToggle('trailColor','rainbow',this)">Rainbow</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORDER BOOK -->
+  <div class="panel-section">
+    <div class="panel-section-hdr" onclick="toggleSection(this)">
+      Order Book <span class="toggle-icon">▼</span>
+    </div>
+    <div class="panel-section-body" id="sec-book">
+      <div id="knobs-book"></div>
+    </div>
+  </div>
+
+  <!-- CHART -->
+  <div class="panel-section">
+    <div class="panel-section-hdr" onclick="toggleSection(this)">
+      Chart <span class="toggle-icon">▼</span>
+    </div>
+    <div class="panel-section-body" id="sec-chart">
+      <div id="knobs-chart"></div>
+      <div class="knob">
+        <div class="knob-row"><span class="knob-label">Show Candles</span></div>
+        <div class="knob-toggle" id="tog-showCandles">
+          <button class="tog-btn active" onclick="setToggle('showCandles',true,this)">On</button>
+          <button class="tog-btn" onclick="setToggle('showCandles',false,this)">Off</button>
+        </div>
+      </div>
+      <div class="knob">
+        <div class="knob-row"><span class="knob-label">Show Grid</span></div>
+        <div class="knob-toggle" id="tog-showGrid">
+          <button class="tog-btn active" onclick="setToggle('showGrid',true,this)">On</button>
+          <button class="tog-btn" onclick="setToggle('showGrid',false,this)">Off</button>
+        </div>
+      </div>
+      <div class="knob">
+        <div class="knob-row"><span class="knob-label">Show Book Heatmap</span></div>
+        <div class="knob-toggle" id="tog-showHeatmap">
+          <button class="tog-btn active" onclick="setToggle('showHeatmap',true,this)">On</button>
+          <button class="tog-btn" onclick="setToggle('showHeatmap',false,this)">Off</button>
+        </div>
+      </div>
+      <div class="knob">
+        <div class="knob-row"><span class="knob-label">Show Footprint</span></div>
+        <div class="knob-toggle" id="tog-showFootprint">
+          <button class="tog-btn active" onclick="setToggle('showFootprint',true,this)">On</button>
+          <button class="tog-btn" onclick="setToggle('showFootprint',false,this)">Off</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTPRINT -->
+  <div class="panel-section">
+    <div class="panel-section-hdr" onclick="toggleSection(this)">
+      Footprint <span class="toggle-icon">▼</span>
+    </div>
+    <div class="panel-section-body" id="sec-footprint">
+      <div id="knobs-footprint"></div>
+    </div>
+  </div>
+
+  <!-- VISUAL -->
+  <div class="panel-section">
+    <div class="panel-section-hdr" onclick="toggleSection(this)">
+      Visual / HUD <span class="toggle-icon">▼</span>
+    </div>
+    <div class="panel-section-body" id="sec-visual">
+      <div id="knobs-visual"></div>
+      <div class="knob">
+        <div class="knob-row"><span class="knob-label">Footstep Icon</span></div>
+        <div class="knob-toggle" id="tog-footIcon">
+          <button class="tog-btn active" onclick="setToggle('footIcon','foot',this)">Foot</button>
+          <button class="tog-btn" onclick="setToggle('footIcon','dot',this)">Dot</button>
+          <button class="tog-btn" onclick="setToggle('footIcon','arrow',this)">Arrow</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="foot-card">
+    <div class="foot-label">Velocity</div>
+    <div class="foot-val pos" id="fVel">+2.40/s</div>
+  </div>
+  <div class="foot-card">
+    <div class="foot-label">Acceleration</div>
+    <div class="foot-val pos" id="fAcc">+0.82</div>
+  </div>
+  <div class="foot-card">
+    <div class="foot-label">Delta</div>
+    <div class="foot-val pos" id="fDelta">+644</div>
+  </div>
+  <div class="foot-card">
+    <div class="foot-label">Buy Lots</div>
+    <div class="foot-val" id="fBuy">0</div>
+  </div>
+  <div class="foot-card">
+    <div class="foot-label">Sell Lots</div>
+    <div class="foot-val" id="fSell">0</div>
+  </div>
+  <div class="vel-wrap">
+    <div class="vel-label">Momentum Pressure</div>
+    <div class="vel-track">
+      <div class="vel-center"></div>
+      <div class="vel-fill" id="velFill"></div>
+    </div>
+  </div>
+  <div class="tape-wrap" id="footerTape"></div>
+</footer>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+//  PANEL HIDE SUPPORT (URL ?panel=0)
+// ═══════════════════════════════════════════════════════
+if (new URLSearchParams(location.search).get('panel') === '0') {
+  document.getElementById('panel').style.display = 'none';
+  document.querySelector('body').style.gridTemplateColumns = '1fr';
+}
+
+// ═══════════════════════════════════════════════════════
+//  CONFIG — all knobs live here
+//  Python can inject via: __CONFIG_OVERRIDE__
+// ═══════════════════════════════════════════════════════
+const _DEFAULTS = {
+  // Footstep
+  velocityThreshold: 0.3,
+  deltaThreshold:    30,
+  footstepSize:      1.0,
+  footstepSpacing:   28,
+  lookaheadLevels:   5,
+  stepOffset:        18,
+  maxSteps:          6,
+
+  // Trail
+  trailLength:       40,
+  fadeSpeed:         1.8,
+  trailMaxWidth:     5,
+  ghostFloor:        0.02,
+  trailWidth:        'velocity',
+  trailColor:        'simple',
+
+  // Order book
+  bookDepth:         20,
+  wallThreshold:     500,
+  imbalanceWindow:   5,
+  pressureDecay:     2,
+
+  // Chart
+  candlePeriod:      15,
+  lookback:          80,
+  showCandles:       true,
+  showGrid:          true,
+  showHeatmap:       true,
+
+  // Footprint
+  showFootprint:     true,
+  footprintBinSize:  50,
+  footprintOpacity:  0.25,
+  footprintMaxBarW:  18,
+
+  // Visual
+  glowIntensity:     0.7,
+  footIcon:          'foot',
+  alertVelocity:     5.0,
+  hudOpacity:        0.85,
+
+  // Live mode
+  liveMode:          false,
+  liveCoin:          'BTC',
+};
+
+const C = Object.assign({}, _DEFAULTS, (typeof __CONFIG_OVERRIDE__ !== 'undefined' ? __CONFIG_OVERRIDE__ : null) || {});
+
+// ═══════════════════════════════════════════════════════
+//  PRESETS
+// ═══════════════════════════════════════════════════════
+const PRESETS = {
+  sensitive: {
+    velocityThreshold: 0.2, deltaThreshold: 20,  footstepSize: 1.5,
+    footstepSpacing:   20,  lookaheadLevels: 8,  trailLength: 60,
+    fadeSpeed: 1.2,  trailMaxWidth: 7, glowIntensity: 1.2,
+    maxSteps: 8,
+  },
+  balanced: {
+    velocityThreshold: 0.3, deltaThreshold: 30,  footstepSize: 1.0,
+    footstepSpacing:   28,  lookaheadLevels: 5,  trailLength: 40,
+    fadeSpeed: 1.8,  trailMaxWidth: 5, glowIntensity: 0.7,
+    maxSteps: 6,
+  },
+  filtered: {
+    velocityThreshold: 1.5, deltaThreshold: 150, footstepSize: 0.7,
+    footstepSpacing:   40,  lookaheadLevels: 3,  trailLength: 20,
+    fadeSpeed: 2.5,  trailMaxWidth: 3, glowIntensity: 0.4,
+    maxSteps: 4,
+  },
+};
+
+// ═══════════════════════════════════════════════════════
+//  KNOB DEFINITIONS
+// ═══════════════════════════════════════════════════════
+const KNOB_DEFS = {
+  foot: [
+    { key:'velocityThreshold', label:'Velocity Threshold', min:0.1, max:5,   step:0.1, unit:'/s'   },
+    { key:'deltaThreshold',    label:'Delta Threshold',    min:0,   max:500, step:10,  unit:' lots' },
+    { key:'footstepSize',      label:'Foot Size',          min:0.3, max:3,   step:0.1, unit:'×'     },
+    { key:'footstepSpacing',   label:'Step Spacing',       min:10,  max:80,  step:2,   unit:'px'    },
+    { key:'lookaheadLevels',   label:'Lookahead Depth',    min:1,   max:15,  step:1,   unit:' lvl'  },
+    { key:'stepOffset',        label:'Lateral Offset',     min:4,   max:50,  step:2,   unit:'px'    },
+    { key:'maxSteps',          label:'Max Steps',          min:1,   max:12,  step:1,   unit:''      },
+  ],
+  trail: [
+    { key:'trailLength',       label:'Trail Length',       min:5,   max:120, step:5,   unit:'s'     },
+    { key:'fadeSpeed',         label:'Fade Speed',         min:0.5, max:5,   step:0.1, unit:'×'     },
+    { key:'trailMaxWidth',     label:'Max Width',          min:1,   max:12,  step:0.5, unit:'px'    },
+    { key:'ghostFloor',        label:'Ghost Floor',        min:0,   max:0.3, step:0.01,unit:''      },
+  ],
+  book: [
+    { key:'bookDepth',         label:'Book Depth',         min:5,   max:50,  step:1,   unit:' lvl'  },
+    { key:'wallThreshold',     label:'Wall Threshold',     min:50,  max:2000,step:50,  unit:' lots' },
+    { key:'imbalanceWindow',   label:'Imbalance Window',   min:1,   max:30,  step:1,   unit:'s'     },
+    { key:'pressureDecay',     label:'Pressure Decay',     min:0.5, max:10,  step:0.5, unit:'s'     },
+  ],
+  chart: [
+    { key:'candlePeriod',      label:'Candle Period',      min:5,   max:60,  step:5,   unit:'s'     },
+    { key:'lookback',          label:'Lookback Ticks',     min:20,  max:200, step:10,  unit:''      },
+  ],
+  footprint: [
+    { key:'footprintBinSize',  label:'Bin Size',           min:1,   max:100, step:1,   unit:'$'     },
+    { key:'footprintOpacity',  label:'Opacity',            min:0.05,max:0.9, step:0.05,unit:''      },
+    { key:'footprintMaxBarW',  label:'Max Bar Width',      min:10,  max:60,  step:2,   unit:'px'    },
+  ],
+  visual: [
+    { key:'glowIntensity',     label:'Glow Intensity',     min:0,   max:2,   step:0.1, unit:'×'     },
+    { key:'alertVelocity',     label:'Alert at Velocity',  min:1,   max:15,  step:0.5, unit:'/s'    },
+    { key:'hudOpacity',        label:'HUD Opacity',        min:0.2, max:1,   step:0.05,unit:''      },
+  ],
+};
+
+// Build knob UI
+function buildKnobs(targetId, defs) {
+  const wrap = document.getElementById(targetId);
+  if (!wrap) return;
+  defs.forEach(def => {
+    const d = document.createElement('div');
+    d.className = 'knob';
+    d.innerHTML = `
+      <div class="knob-row">
+        <span class="knob-label">${def.label}</span>
+        <span class="knob-val" id="kv-${def.key}">${C[def.key]}${def.unit}</span>
+      </div>
+      <input type="range" id="k-${def.key}"
+        min="${def.min}" max="${def.max}" step="${def.step}" value="${C[def.key]}">
+    `;
+    wrap.appendChild(d);
+    d.querySelector('input').addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      C[def.key] = v;
+      document.getElementById(`kv-${def.key}`).textContent = `${v}${def.unit}`;
+    });
+  });
+}
+buildKnobs('knobs-foot',      KNOB_DEFS.foot);
+buildKnobs('knobs-trail',     KNOB_DEFS.trail);
+buildKnobs('knobs-book',      KNOB_DEFS.book);
+buildKnobs('knobs-chart',     KNOB_DEFS.chart);
+buildKnobs('knobs-footprint', KNOB_DEFS.footprint);
+buildKnobs('knobs-visual',    KNOB_DEFS.visual);
+
+// Sync toggle button states from C on load
+function syncToggleBtn(groupId, value) {
+  const container = document.getElementById(groupId);
+  if (!container) return;
+  container.querySelectorAll('.tog-btn').forEach(btn => {
+    const btnVal = btn.getAttribute('onclick').match(/setToggle\([^,]+,([^,)]+)/)?.[1]?.trim();
+    if (btnVal === String(value) || btnVal === `'${value}'`) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+syncToggleBtn('tog-trailWidth',    C.trailWidth);
+syncToggleBtn('tog-trailColor',    C.trailColor);
+syncToggleBtn('tog-showCandles',   C.showCandles);
+syncToggleBtn('tog-showGrid',      C.showGrid);
+syncToggleBtn('tog-showHeatmap',   C.showHeatmap);
+syncToggleBtn('tog-showFootprint', C.showFootprint);
+syncToggleBtn('tog-footIcon',      C.footIcon);
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  Object.entries(p).forEach(([key, val]) => {
+    C[key] = val;
+    const slider = document.getElementById(`k-${key}`);
+    const valEl  = document.getElementById(`kv-${key}`);
+    const def    = Object.values(KNOB_DEFS).flat().find(d => d.key === key);
+    if (slider) slider.value = val;
+    if (valEl && def) valEl.textContent = `${val}${def.unit}`;
+  });
+  ['sensitive','balanced','filtered'].forEach(n => {
+    document.getElementById(`pre-${n}`)?.classList.remove('active');
+  });
+  document.getElementById(`pre-${name}`)?.classList.add('active');
+}
+
+function setToggle(key, val, btn) {
+  C[key] = val;
+  const container = btn.parentElement;
+  container.querySelectorAll('.tog-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function toggleSection(hdr) {
+  hdr.classList.toggle('collapsed');
+  hdr.nextElementSibling.classList.toggle('collapsed');
+}
+
+// ═══════════════════════════════════════════════════════
+//  PRICE SIMULATOR
+// ═══════════════════════════════════════════════════════
+class PriceSimulator {
+  constructor(startPrice) {
+    this.price      = startPrice;
+    this.velocity   = 0;
+    this.prevVel    = 0;
+    this.phase      = 'flat';
+    this.phaseTimer = 0;
+    this.phaseDur   = 25;
+    this.buyVol     = 400;
+    this.sellVol    = 400;
+    this.orderBook  = this._genBook();
+    this.bookTimer  = 0;
+  }
+
+  _genBook() {
+    const bids = [], asks = [];
+    for (let i = 0; i < 30; i++) {
+      const bSize = Math.random() * 600 + 50;
+      const aSize = Math.random() * 600 + 50;
+      bids.push({ price: this.price - i * 1.5, size: bSize });
+      asks.push({ price: this.price + i * 1.5, size: aSize });
+    }
+    for (let w = 0; w < 3; w++) {
+      bids[Math.floor(Math.random() * 8) + 2].size += 800 + Math.random() * 1200;
+      asks[Math.floor(Math.random() * 8) + 2].size += 800 + Math.random() * 1200;
+    }
+    return { bids, asks };
+  }
+
+  tick() {
+    this.phaseTimer++;
+    this.bookTimer++;
+
+    if (this.phaseTimer >= this.phaseDur) {
+      this.phaseTimer = 0;
+      this.phaseDur   = 18 + Math.floor(Math.random() * 45);
+      const r = Math.random();
+      this.phase = r < 0.35 ? 'bull' : r < 0.65 ? 'bear' : 'flat';
+    }
+    if (this.bookTimer > 40) {
+      this.orderBook = this._genBook();
+      this.bookTimer = 0;
+    }
+
+    let targetVel = 0;
+    if (this.phase === 'bull') targetVel = 1.8 + Math.random() * 1.5;
+    if (this.phase === 'bear') targetVel = -(1.8 + Math.random() * 1.5);
+
+    this.velocity = this.velocity * 0.75 + targetVel * 0.25 + (Math.random() - 0.5) * 1.2;
+    const accel   = this.velocity - this.prevVel;
+    this.prevVel  = this.velocity;
+    this.price   += this.velocity + (Math.random() - 0.5) * 4;
+
+    const isBull = this.phase === 'bull';
+    const isBear = this.phase === 'bear';
+    this.buyVol  = isBull
+      ? 300 + Math.random() * 900
+      : isBear ? 80 + Math.random() * 250
+               : 150 + Math.random() * 400;
+    this.sellVol = isBear
+      ? 300 + Math.random() * 900
+      : isBull ? 80 + Math.random() * 250
+               : 150 + Math.random() * 400;
+
+    return {
+      price:    this.price,
+      velocity: this.velocity,
+      accel,
+      delta:    this.buyVol - this.sellVol,
+      buyVol:   this.buyVol,
+      sellVol:  this.sellVol,
+      phase:    this.phase,
+      book:     this.orderBook,
+      time:     Date.now(),
+      trades:   this._simTrades(),
+    };
+  }
+
+  _simTrades() {
+    // Simulate a batch of trades for footprint accumulation
+    const trades = [];
+    const n = 3 + Math.floor(Math.random() * 8);
+    const isBull = this.phase === 'bull';
+    const isBear = this.phase === 'bear';
+    for (let i = 0; i < n; i++) {
+      const side = isBull
+        ? (Math.random() < 0.7 ? 'B' : 'A')
+        : isBear
+          ? (Math.random() < 0.7 ? 'A' : 'B')
+          : (Math.random() < 0.5 ? 'B' : 'A');
+      const pxOffset = (Math.random() - 0.5) * 5;
+      trades.push({
+        side,
+        px: this.price + pxOffset,
+        sz: 0.01 + Math.random() * 0.5,
+      });
+    }
+    return trades;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  CANDLE AGGREGATOR
+// ═══════════════════════════════════════════════════════
+class CandleAgg {
+  constructor() { this.candles = []; this.current = null; }
+
+  push(tick) {
+    const t = tick.time;
+    if (!this.current || t - this.current.openTime >= C.candlePeriod * 1000) {
+      if (this.current) this.candles.push(this.current);
+      this.current = {
+        openTime: t, open: tick.price, high: tick.price,
+        low: tick.price, close: tick.price,
+        buyVol: 0, sellVol: 0,
+        footprintBins: {},   // price_level -> {buy, sell}
+      };
+      if (this.candles.length > 400) this.candles.shift();
+    }
+    this.current.high  = Math.max(this.current.high, tick.price);
+    this.current.low   = Math.min(this.current.low,  tick.price);
+    this.current.close = tick.price;
+    this.current.buyVol  += tick.buyVol;
+    this.current.sellVol += tick.sellVol;
+
+    // Accumulate footprint bins from trades
+    if (tick.trades) {
+      tick.trades.forEach(tr => {
+        const binKey = Math.round(tr.px / C.footprintBinSize) * C.footprintBinSize;
+        if (!this.current.footprintBins[binKey]) {
+          this.current.footprintBins[binKey] = { buy: 0, sell: 0 };
+        }
+        if (tr.side === 'B') this.current.footprintBins[binKey].buy  += tr.sz;
+        else                  this.current.footprintBins[binKey].sell += tr.sz;
+      });
+    }
+  }
+
+  all() {
+    return this.current ? [...this.candles, this.current] : this.candles;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  LIVE MODE — Hyperliquid WebSocket
+// ═══════════════════════════════════════════════════════
+let liveMode       = !!C.liveMode;
+let liveWS         = null;
+let liveReconTimer = null;
+let livePendingTrades = [];    // accumulate 1s of trades
+let liveLastBook   = null;
+let liveFlushTimer = null;
+let livePrevPrice  = null;
+let livePrevVel    = 0;
+let liveAccumBuy   = 0;
+let liveAccumSell  = 0;
+
+function connectLive(coin) {
+  coin = coin || C.liveCoin;
+  if (liveWS) { try { liveWS.close(); } catch(e){} liveWS = null; }
+  if (liveReconTimer) { clearTimeout(liveReconTimer); liveReconTimer = null; }
+  connectPythSSE(coin);   // start Pyth price oracle
+
+  const ws = new WebSocket('wss://api.hyperliquid.xyz/ws');
+  liveWS = ws;
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ method:'subscribe', subscription:{ type:'trades', coin } }));
+    ws.send(JSON.stringify({ method:'subscribe', subscription:{ type:'l2Book', coin } }));
+    // Start 1s flush loop
+    if (liveFlushTimer) clearInterval(liveFlushTimer);
+    liveFlushTimer = setInterval(() => flushLiveTick(coin), 1000);
+  };
+
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch(e) { return; }
+
+    if (msg.channel === 'trades' && Array.isArray(msg.data)) {
+      msg.data.forEach(tr => {
+        livePendingTrades.push({
+          side: tr.side,
+          px:   parseFloat(tr.px),
+          sz:   parseFloat(tr.sz),
+        });
+        if (tr.side === 'B') liveAccumBuy  += parseFloat(tr.sz);
+        else                  liveAccumSell += parseFloat(tr.sz);
+      });
+    }
+
+    if (msg.channel === 'l2Book' && msg.data) {
+      const raw = msg.data;
+      const bids = (raw.levels[0] || []).map(([px,sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }));
+      const asks = (raw.levels[1] || []).map(([px,sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }));
+      // Big-wall injection
+      liveLastBook = { bids, asks };
+    }
+  };
+
+  ws.onerror = () => {};
+  ws.onclose = () => {
+    if (liveFlushTimer) { clearInterval(liveFlushTimer); liveFlushTimer = null; }
+    if (liveMode) {
+      liveReconTimer = setTimeout(() => connectLive(coin), 3000);
+    }
+  };
+}
+
+function flushLiveTick(coin) {
+  if (!liveMode) return;
+  if (livePendingTrades.length === 0 && !liveLastBook) return;
+
+  // Pyth oracle price takes priority (aggregated, 400ms cadence).
+  // Fall back to last Hyperliquid trade price, then last known.
+  let price = pythPrice
+    ?? (livePendingTrades.length > 0
+        ? livePendingTrades[livePendingTrades.length - 1].px
+        : (lastTick ? lastTick.price : null));
+  if (price === null) return;
+
+  // Velocity estimate: price change / 1s
+  const vel = livePrevPrice !== null ? (price - livePrevPrice) : 0;
+  const acc = vel - livePrevVel;
+  livePrevPrice = price;
+  livePrevVel   = vel;
+
+  const buyLots  = liveAccumBuy  * 1000;   // scale BTC -> lots
+  const sellLots = liveAccumSell * 1000;
+
+  // Determine phase
+  let phase = 'flat';
+  if (vel > 2)  phase = 'bull';
+  if (vel < -2) phase = 'bear';
+
+  // Book fallback
+  const book = liveLastBook || (lastTick ? lastTick.book : null);
+
+  const tick = {
+    price,
+    velocity: vel,
+    accel:    acc,
+    delta:    buyLots - sellLots,
+    buyVol:   buyLots,
+    sellVol:  sellLots,
+    phase,
+    book,
+    time:     Date.now(),
+    trades:   [...livePendingTrades],
+  };
+
+  // Reset accumulators
+  livePendingTrades = [];
+  liveAccumBuy  = 0;
+  liveAccumSell = 0;
+
+  // Feed into shared pipeline
+  history.push(tick);
+  if (history.length > 500) history.shift();
+  agg.push(tick);
+  lastTick = tick;
+  updateUI();
+  updatePnL();
+  addTapeEntry(tick);
+}
+
+function disconnectLive() {
+  if (liveFlushTimer) { clearInterval(liveFlushTimer); liveFlushTimer = null; }
+  if (liveReconTimer) { clearTimeout(liveReconTimer); liveReconTimer = null; }
+  if (liveWS) { try { liveWS.close(); } catch(e){} liveWS = null; }
+  disconnectPythSSE();
+  livePrevPrice = null;
+  livePrevVel   = 0;
+}
+
+function toggleLiveMode() {
+  liveMode = !liveMode;
+  C.liveMode = liveMode;
+  const btn = document.getElementById('liveToggleBtn');
+  const ind = document.getElementById('liveIndicator');
+  const coinWrap = document.getElementById('coinWrap');
+  const pairLabel = document.getElementById('pairLabel');
+
+  if (liveMode) {
+    btn.textContent = '📊 Sim';
+    btn.classList.add('live-active');
+    ind.classList.add('visible');
+    coinWrap.classList.add('visible');
+    const coin = (document.getElementById('coinInput')?.value || C.liveCoin).toUpperCase();
+    C.liveCoin = coin;
+    const hasPyth = !!PYTH_FEEDS[coin];
+    setPairLabel(coin, true, hasPyth);
+    connectLive(coin);
+  } else {
+    btn.textContent = '📡 Go Live';
+    btn.classList.remove('live-active');
+    ind.classList.remove('visible');
+    coinWrap.classList.remove('visible');
+    setPairLabel('BTC', false, false);
+    disconnectLive();
+  }
+}
+
+function setPairLabel(coin, live, pyth) {
+  const el = document.getElementById('pairLabel');
+  if (!el) return;
+  if (!live) { el.textContent = `${coin}-PERP · SIM`; return; }
+  el.innerHTML = pyth
+    ? `${coin}-PERP · LIVE · <span class="pyth-badge">PYTH</span>`
+    : `${coin}-PERP · LIVE`;
+}
+
+function changeCoin(raw) {
+  const coin = raw.toUpperCase().trim();
+  if (!coin) return;
+  C.liveCoin = coin;
+  document.getElementById('coinInput').value = coin;
+  setPairLabel(coin, liveMode, liveMode && !!PYTH_FEEDS[coin]);
+  if (liveMode) connectLive(coin);   // connectLive calls connectPythSSE internally
+}
+
+// liveMode auto-connect handled in bootstrap below
+
+// ═══════════════════════════════════════════════════════
+//  PYTH NETWORK — aggregated oracle, 400ms updates, free
+//  Hermes docs: https://hermes.pyth.network
+// ═══════════════════════════════════════════════════════
+const PYTH_HERMES  = 'https://hermes.pyth.network';
+const PYTH_FEEDS = {
+  BTC:  'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
+  ETH:  'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
+  SOL:  'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d',
+  BNB:  '2f95862b045670cd22bee3114c39763a4a08beeb663b145d283c31d7d1101c4f',
+  AVAX: '93da3352f9f1d105fdfe4971cfa80e9dd777bfc5d0f683ebb6e1294b92137bb7',
+  DOGE: 'dcef50dd0a4cd2dcc17e45df1676dcb336a11a61c69df7a0299b0150c672d25c',
+  LINK: '8ac0c70fff57e9aefdf5edf44b51d62c2d433653cbb2cf5cc06bb115af04d221',
+  ARB:  '3fa4252848f9f0a1480be62745a4629d9eb1322aebab8a791e344b3b9c1adcf5',
+  OP:   '385f64d993f7b77d8182ed5003d97c745a809d25b49ef4b9ed0b7c606dfd5596',
+  MATIC:'5de33a9112c2b700b8d30b8a3402c103578ccfa2765696471cc672bd5cf6ac52',
+  PEPE: 'd69731a2e74ac1ce884fc3890f7ee324b6deb66147055249568869ed700882e4',
+};
+
+// Convert Pyth fixed-point to float
+function pythToFloat(p) {
+  return parseFloat(p.price) * Math.pow(10, p.expo);
+}
+
+let pythSSE       = null;   // EventSource for live price stream
+let pythPrice     = null;   // most recent Pyth price (null until first SSE message)
+let pythConnected = false;
+
+function connectPythSSE(coin) {
+  disconnectPythSSE();
+  const id = PYTH_FEEDS[coin];
+  if (!id) { pythConnected = false; return; }
+
+  pythSSE = new EventSource(
+    `${PYTH_HERMES}/v2/updates/price/stream?ids[]=${id}&parsed=true`
+  );
+
+  pythSSE.onopen = () => {
+    pythConnected = true;
+    setPairLabel(coin, true, true);
+  };
+
+  pythSSE.onmessage = (e) => {
+    try {
+      const data   = JSON.parse(e.data);
+      const parsed = data?.parsed?.[0]?.price;
+      if (!parsed) return;
+      pythPrice = pythToFloat(parsed);
+    } catch(_) {}
+  };
+
+  pythSSE.onerror = () => {
+    pythConnected = false;
+    // EventSource auto-reconnects — no manual retry needed
+  };
+}
+
+function disconnectPythSSE() {
+  if (pythSSE) { pythSSE.close(); pythSSE = null; }
+  pythConnected = false;
+  pythPrice     = null;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PRICE BOOTSTRAP — Pyth → Hyperliquid → Binance
+// ═══════════════════════════════════════════════════════
+async function fetchCurrentPrice(coin) {
+  // 1. Try Pyth Hermes REST (aggregated oracle, most accurate)
+  const id = PYTH_FEEDS[coin];
+  if (id) {
+    try {
+      const res = await fetch(
+        `${PYTH_HERMES}/v2/updates/price/latest?ids[]=${id}&parsed=true`
+      );
+      const data = await res.json();
+      const px = pythToFloat(data?.parsed?.[0]?.price);
+      if (px > 0) return px;
+    } catch(e) { /* fall through */ }
+  }
+  // 2. Hyperliquid perp mid
+  try {
+    const res = await fetch('https://api.hyperliquid.xyz/info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'allMids' }),
+    });
+    const mids = await res.json();
+    const px = parseFloat(mids[coin]);
+    if (px > 0) return px;
+  } catch (e) { /* fall through */ }
+  // 3. Binance spot
+  try {
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${coin}USDT`);
+    const d = await res.json();
+    return parseFloat(d.price);
+  } catch (e) { /* fall through */ }
+  return 94231.5;
+}
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let sim      = null;
+const agg    = new CandleAgg();
+const history = [];
+let paused   = false;
+let lastTick = null;
+let simReady = false;
+
+// ═══════════════════════════════════════════════════════
+//  CANVAS SETUP
+// ═══════════════════════════════════════════════════════
+const canvas = document.getElementById('chart');
+const ctx    = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const wrap = document.getElementById('chartWrap');
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+}
+resizeCanvas();
+new ResizeObserver(resizeCanvas).observe(document.getElementById('chartWrap'));
+
+// ═══════════════════════════════════════════════════════
+//  COORDINATE HELPERS
+// ═══════════════════════════════════════════════════════
+const PAD = { t: 28, b: 28, l: 14, r: 72 };
+
+function getPriceRange(ticks) {
+  const prices = ticks.map(t => t.price);
+  const lo = Math.min(...prices), hi = Math.max(...prices);
+  const pad = (hi - lo) * 0.15 || 50;
+  return { lo: lo - pad, hi: hi + pad };
+}
+
+function toX(idx, total) {
+  const W = canvas.width - PAD.l - PAD.r;
+  return PAD.l + (idx / (total - 1)) * W;
+}
+function toY(price, lo, hi) {
+  const H = canvas.height - PAD.t - PAD.b;
+  return PAD.t + H - ((price - lo) / (hi - lo)) * H;
+}
+
+// ═══════════════════════════════════════════════════════
+//  DRAW: BACKGROUND & GRID
+// ═══════════════════════════════════════════════════════
+function drawBG(lo, hi) {
+  const W = canvas.width, H = canvas.height;
+
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#04050f');
+  bg.addColorStop(1, '#070920');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Right-axis band
+  ctx.fillStyle = 'rgba(4,5,15,0.75)';
+  ctx.fillRect(W - PAD.r, 0, PAD.r, H);
+
+  if (!C.showGrid) return;
+
+  ctx.lineWidth = 1;
+  const steps = 8;
+  for (let i = 0; i <= steps; i++) {
+    const price = lo + ((hi - lo) / steps) * i;
+    const y     = toY(price, lo, hi);
+
+    // Grid line
+    ctx.strokeStyle = 'rgba(40,48,90,0.55)';
+    ctx.setLineDash([3, 5]);
+    ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(W - PAD.r, y); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Tick mark
+    ctx.strokeStyle = 'rgba(100,115,180,0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W - PAD.r, y); ctx.lineTo(W - PAD.r + 4, y); ctx.stroke();
+
+    // Label background pill
+    const label = `$${price.toFixed(0)}`;
+    ctx.font = 'bold 11px "JetBrains Mono", monospace';
+    const tw = ctx.measureText(label).width;
+    const px = W - PAD.r + 6, py = y - 9, pw = tw + 8, ph = 16;
+    ctx.fillStyle = 'rgba(10,12,28,0.85)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(px, py, pw, ph, 3);
+    else ctx.rect(px, py, pw, ph);
+    ctx.fill();
+
+    // Label text — bright white-blue
+    ctx.fillStyle   = 'rgba(200,215,255,0.92)';
+    ctx.textAlign   = 'left';
+    ctx.shadowColor = 'rgba(100,140,255,0.5)';
+    ctx.shadowBlur  = 4;
+    ctx.fillText(label, W - PAD.r + 10, y + 4);
+    ctx.shadowBlur  = 0;
+  }
+
+  const cols = 6;
+  for (let i = 0; i <= cols; i++) {
+    const x = PAD.l + ((W - PAD.l - PAD.r) / cols) * i;
+    ctx.strokeStyle = 'rgba(28,32,68,0.3)';
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x, PAD.t); ctx.lineTo(x, H - PAD.b); ctx.stroke();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  DRAW: ORDER BOOK HEATMAP
+// ═══════════════════════════════════════════════════════
+function drawHeatmap(book, lo, hi) {
+  if (!C.showHeatmap || !book) return;
+  const W      = canvas.width;
+  const chartW = W - PAD.l - PAD.r;
+
+  // Only render the top-8 largest walls per side — prevents stripe flood
+  const topBids = [...book.bids]
+    .filter(l => l.size >= C.wallThreshold)
+    .sort((a, b) => b.size - a.size).slice(0, 8);
+  const topAsks = [...book.asks]
+    .filter(l => l.size >= C.wallThreshold)
+    .sort((a, b) => b.size - a.size).slice(0, 8);
+
+  const walls = [
+    ...topBids.map(l => ({ ...l, isBid: true  })),
+    ...topAsks.map(l => ({ ...l, isBid: false })),
+  ];
+
+  walls.forEach(level => {
+    if (level.price < lo || level.price > hi) return;
+    const y     = toY(level.price, lo, hi);
+    const norm  = Math.min(1, (level.size - C.wallThreshold) / (C.wallThreshold * 3));
+    const alpha = 0.08 + norm * 0.20;
+    const [r,g,b] = level.isBid ? [0,229,160] : [255,51,102];
+    const grad  = ctx.createLinearGradient(PAD.l, 0, W - PAD.r, 0);
+    grad.addColorStop(0,   `rgba(${r},${g},${b},0)`);
+    grad.addColorStop(0.15,`rgba(${r},${g},${b},${alpha})`);
+    grad.addColorStop(0.85,`rgba(${r},${g},${b},${alpha})`);
+    grad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle   = grad;
+    ctx.shadowColor = `rgb(${r},${g},${b})`;
+    ctx.shadowBlur  = 6;
+    ctx.fillRect(PAD.l, y - 2, chartW, 4);
+    ctx.shadowBlur  = 0;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  DRAW: FOOTPRINT COLUMN
+// ═══════════════════════════════════════════════════════
+function drawFootprint(candles, lo, hi, visibleTicks) {
+  if (!C.showFootprint || candles.length < 2) return;
+  const W       = canvas.width - PAD.l - PAD.r;
+  const period  = C.candlePeriod * 1000;
+  const now     = Date.now();
+  const oldest  = now - visibleTicks * 1000;
+
+  candles.forEach(c => {
+    if (c.openTime < oldest) return;
+    if (!c.footprintBins || Object.keys(c.footprintBins).length === 0) return;
+
+    const frac = (c.openTime - oldest) / (visibleTicks * 1000);
+    const cx   = PAD.l + frac * W;
+
+    // Find max volume in this candle for normalization
+    let maxVol = 0;
+    Object.values(c.footprintBins).forEach(b => {
+      maxVol = Math.max(maxVol, b.buy, b.sell);
+    });
+    if (maxVol === 0) return;
+
+    ctx.save();
+    ctx.globalAlpha = C.footprintOpacity;
+
+    Object.entries(c.footprintBins).forEach(([priceLevel, bins]) => {
+      const pl = parseFloat(priceLevel);
+      if (pl < lo || pl > hi) return;
+      const y = toY(pl, lo, hi);
+      const barH = Math.max(1, Math.abs(toY(pl - C.footprintBinSize * 0.5, lo, hi) - toY(pl + C.footprintBinSize * 0.5, lo, hi)));
+
+      // Buy bar: extends RIGHT (green)
+      if (bins.buy > 0) {
+        const barW = (bins.buy / maxVol) * C.footprintMaxBarW;
+        ctx.fillStyle = '#00e5a0';
+        ctx.fillRect(cx, y - barH * 0.5, barW, barH);
+      }
+      // Sell bar: extends LEFT (red)
+      if (bins.sell > 0) {
+        const barW = (bins.sell / maxVol) * C.footprintMaxBarW;
+        ctx.fillStyle = '#ff3366';
+        ctx.fillRect(cx - barW, y - barH * 0.5, barW, barH);
+      }
+    });
+
+    ctx.restore();
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  DRAW: STUNNING CANDLES + VOLUME BARS
+// ═══════════════════════════════════════════════════════
+function drawCandles(candles, lo, hi, visibleTicks) {
+  if (!C.showCandles || candles.length < 2) return;
+  const chartW  = canvas.width - PAD.l - PAD.r;
+  const chartH  = canvas.height - PAD.t - PAD.b;
+  const period  = C.candlePeriod * 1000;
+  const now     = Date.now();
+  const oldest  = now - visibleTicks * 1000;
+  const volAreaH = Math.min(48, chartH * 0.09);
+  const volBaseY = canvas.height - PAD.b;
+
+  // Pre-calc max volume for normalising vol bars
+  let maxVol = 1;
+  candles.forEach(c => { maxVol = Math.max(maxVol, c.buyVol + c.sellVol); });
+
+  candles.forEach((c, idx) => {
+    if (c.openTime < oldest) return;
+    const isLive = idx === candles.length - 1;
+    const frac   = (c.openTime - oldest) / (visibleTicks * 1000);
+    const cx     = PAD.l + frac * chartW;
+    const cw     = Math.max(4, (period / (visibleTicks * 1000)) * chartW - 3);
+    const bull   = c.close >= c.open;
+    const [r,g,b]= bull ? [0,229,160] : [255,51,102];
+
+    const bodyAlpha = isLive ? 0.85 : 0.55;
+    const glowAmt   = isLive ? 18   : 9;
+
+    const yO      = toY(c.open,  lo, hi);
+    const yC      = toY(c.close, lo, hi);
+    const yH      = toY(c.high,  lo, hi);
+    const yL      = toY(c.low,   lo, hi);
+    const bodyTop = Math.min(yO, yC);
+    const bodyH   = Math.max(2, Math.abs(yC - yO));
+    const midX    = cx + cw / 2;
+
+    // ── Wick glow ──
+    ctx.save();
+    ctx.shadowColor = `rgb(${r},${g},${b})`;
+    ctx.shadowBlur  = glowAmt * C.glowIntensity;
+    ctx.strokeStyle = `rgba(${r},${g},${b},${bodyAlpha * 0.8})`;
+    ctx.lineWidth   = isLive ? 2 : 1.5;
+    ctx.beginPath(); ctx.moveTo(midX, yH); ctx.lineTo(midX, yL); ctx.stroke();
+    ctx.restore();
+
+    // ── Body gradient ──
+    const grad = ctx.createLinearGradient(cx, bodyTop, cx, bodyTop + bodyH);
+    grad.addColorStop(0,   `rgba(${r},${g},${b},${bodyAlpha * 0.5})`);
+    grad.addColorStop(0.4, `rgba(${r},${g},${b},${bodyAlpha})`);
+    grad.addColorStop(1,   `rgba(${r},${g},${b},${bodyAlpha * 0.6})`);
+
+    ctx.save();
+    ctx.shadowColor = `rgb(${r},${g},${b})`;
+    ctx.shadowBlur  = glowAmt * 1.4 * C.glowIntensity;
+    ctx.fillStyle   = grad;
+    const radius    = Math.min(3, cw * 0.18);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(cx, bodyTop, cw, bodyH, radius);
+    else ctx.rect(cx, bodyTop, cw, bodyH);
+    ctx.fill();
+    ctx.restore();
+
+    // ── Body outline ──
+    ctx.strokeStyle = `rgba(${r},${g},${b},${bodyAlpha})`;
+    ctx.lineWidth   = isLive ? 1.5 : 1;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(cx, bodyTop, cw, bodyH, radius);
+    else ctx.rect(cx, bodyTop, cw, bodyH);
+    ctx.stroke();
+
+    // ── Inner highlight bar (top edge shimmer) ──
+    const shimW = Math.max(1, cw * 0.45);
+    const shimG = ctx.createLinearGradient(midX - shimW/2, 0, midX + shimW/2, 0);
+    shimG.addColorStop(0,   'rgba(255,255,255,0)');
+    shimG.addColorStop(0.5, `rgba(255,255,255,${isLive ? 0.22 : 0.1})`);
+    shimG.addColorStop(1,   'rgba(255,255,255,0)');
+    ctx.fillStyle = shimG;
+    ctx.fillRect(midX - shimW/2, bodyTop + 1, shimW, 2);
+
+    // ── Volume bar ──
+    const vol  = c.buyVol + c.sellVol;
+    const volH = (vol / maxVol) * volAreaH;
+    const volGrad = ctx.createLinearGradient(0, volBaseY - volH, 0, volBaseY);
+    volGrad.addColorStop(0, `rgba(${r},${g},${b},0.45)`);
+    volGrad.addColorStop(1, `rgba(${r},${g},${b},0.05)`);
+    ctx.fillStyle = volGrad;
+    ctx.fillRect(cx + 1, volBaseY - volH, cw - 2, volH);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  DRAW: TRAIL (comet tail)
+// ═══════════════════════════════════════════════════════
+function trailColor(vel, phase) {
+  const mode = C.trailColor;
+  const up   = vel > 0;
+  if (mode === 'simple') {
+    return up ? [0, 229, 160] : [255, 51, 102];
+  }
+  if (mode === 'heat') {
+    const h = Math.abs(vel) / 6;
+    if (h > 0.7) return [255, 80, 0];
+    if (h > 0.4) return up ? [0, 220, 140] : [255, 51, 102];
+    return [74, 85, 128];
+  }
+  if (mode === 'rainbow') {
+    const hue = ((vel + 5) / 10) * 270;
+    return hslToRgb(hue, 100, 60);
+  }
+  return [107, 117, 168];
+}
+
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(f(0)*255), Math.round(f(8)*255), Math.round(f(4)*255)];
+}
+
+function drawTrail(ticks, lo, hi) {
+  if (ticks.length < 2) return;
+  const now    = Date.now();
+  const trailMs = C.trailLength * 1000;
+  const total  = ticks.length;
+
+  for (let i = 1; i < total; i++) {
+    const curr = ticks[i];
+    const prev = ticks[i - 1];
+    const age  = now - curr.time;
+    if (age > trailMs) continue;
+
+    const ageFrac  = age / trailMs;
+    const alpha    = Math.max(C.ghostFloor, Math.pow(1 - ageFrac, C.fadeSpeed));
+    const absVel   = Math.abs(curr.velocity);
+    const intensity = Math.min(1, absVel / 4);
+
+    const [r, g, b] = trailColor(curr.velocity, curr.phase);
+
+    let width;
+    if (C.trailWidth === 'velocity') width = 1 + intensity * C.trailMaxWidth;
+    else if (C.trailWidth === 'volume') width = 1 + Math.min(1, (curr.buyVol + curr.sellVol) / 1500) * C.trailMaxWidth;
+    else width = C.trailMaxWidth * 0.6;
+
+    const xi   = toX(i,     total);
+    const xi1  = toX(i - 1, total);
+    const yi   = toY(curr.price, lo, hi);
+    const yi1  = toY(prev.price, lo, hi);
+
+    ctx.beginPath();
+    ctx.moveTo(xi1, yi1);
+    ctx.lineTo(xi,  yi);
+    ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+    ctx.lineWidth   = width;
+    ctx.lineCap     = 'round';
+    ctx.shadowColor = `rgb(${r},${g},${b})`;
+    ctx.shadowBlur  = intensity * C.glowIntensity * 18;
+    ctx.stroke();
+    ctx.shadowBlur  = 0;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  DRAW: FOOTSTEP (single foot)
+// ═══════════════════════════════════════════════════════
+function drawFoot(cx, cy, size, isLeft, color, alpha, facingUp) {
+  if (alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, alpha);
+  ctx.translate(cx, cy);
+  if (!facingUp) ctx.rotate(Math.PI);
+  if (isLeft) ctx.scale(-1, 1);
+
+  const s = (size * C.footstepSize) / 30;
+  ctx.scale(s, s);
+
+  ctx.shadowColor = color;
+  ctx.shadowBlur  = 14 / s;
+  ctx.fillStyle   = color;
+
+  ctx.beginPath();
+  ctx.ellipse(0, 13, 7, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 6.5, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, -9, 9.5, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  [[-7.5,-16.5,3.8], [-3.5,-19,3.2], [0.5,-20,3.0], [4.5,-18.8,2.6], [8,-16,2.2]].forEach(([tx,ty,r]) => {
+    ctx.beginPath();
+    ctx.arc(tx, ty, r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.restore();
+}
+
+function drawDot(cx, cy, size, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * C.footstepSize, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur  = 10;
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawArrowHead(cx, cy, size, color, alpha, facingUp) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(cx, cy);
+  if (!facingUp) ctx.rotate(Math.PI);
+  const s = size * C.footstepSize * 0.6;
+  ctx.beginPath();
+  ctx.moveTo(0, -s * 1.5);
+  ctx.lineTo(-s, s * 0.8);
+  ctx.lineTo(s, s * 0.8);
+  ctx.closePath();
+  ctx.fillStyle   = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur  = 12;
+  ctx.fill();
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════
+//  DRAW: FOOTSTEPS (all steps for current tick)
+// ═══════════════════════════════════════════════════════
+function drawFootsteps(tick, lo, hi, totalTicks, tickIdx, histAlpha) {
+  const absVel   = Math.abs(tick.velocity);
+  const absDelta = Math.abs(tick.delta);
+  if (absVel < C.velocityThreshold || absDelta < C.deltaThreshold) return;
+
+  const isUp   = tick.velocity > 0;
+  const color  = isUp ? '#00e5a0' : '#ff3366';
+  const cx     = toX(tickIdx ?? (totalTicks - 1), totalTicks);
+  const baseY  = toY(tick.price, lo, hi);
+  const dir    = isUp ? -1 : 1;
+  const numSteps = Math.min(C.maxSteps, Math.floor(absVel / 1.0) + 2);
+  const aMult  = histAlpha ?? 0.95;
+
+  for (let i = 0; i < numSteps; i++) {
+    const stepFrac = (i + 1) / (numSteps + 1);
+    const stepY    = baseY + dir * (i + 1) * C.footstepSpacing;
+    const isLeft   = i % 2 === 0;
+    const offX     = isLeft ? -C.stepOffset : C.stepOffset;
+    const alpha    = Math.min(0.95, (1 - stepFrac * 0.6) * Math.min(1, absVel / 2) * aMult);
+    const size     = 20 + absVel * 1.5;
+
+    const icon = C.footIcon;
+    if (icon === 'foot')  drawFoot(cx + offX, stepY, size, isLeft, color, alpha, isUp);
+    if (icon === 'dot')   drawDot(cx + offX, stepY, 6 + absVel * 0.8, color, alpha);
+    if (icon === 'arrow') drawArrowHead(cx + offX, stepY, 12 + absVel, color, alpha, isUp);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  DRAW: COMET HEAD (current price dot)
+// ═══════════════════════════════════════════════════════
+function drawComet(tick, lo, hi, totalTicks) {
+  const x     = toX(totalTicks - 1, totalTicks);
+  const y     = toY(tick.price, lo, hi);
+  const isUp  = tick.velocity > 0;
+  const color = Math.abs(tick.velocity) >= C.alertVelocity
+    ? '#ff8c00'
+    : isUp ? '#00e5a0' : '#ff3366';
+
+  const t = Date.now() / 800;
+
+  for (let r = 0; r < 3; r++) {
+    const phase = (t + r * 0.33) % 1;
+    const rad   = 6 + phase * 32;
+    const a     = (1 - phase) * 0.4 * C.glowIntensity;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1.5;
+    ctx.globalAlpha = a;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fillStyle   = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur  = 20 * C.glowIntensity;
+  ctx.fill();
+  ctx.shadowBlur  = 0;
+
+  ctx.fillStyle   = color;
+  ctx.font        = 'bold 11px "JetBrains Mono", monospace';
+  ctx.textAlign   = 'left';
+  ctx.globalAlpha = C.hudOpacity;
+  ctx.fillText(`$${tick.price.toFixed(1)}`, x + 10, y + 4);
+  ctx.globalAlpha = 1;
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAIN RENDER
+// ═══════════════════════════════════════════════════════
+function render() {
+  if (!lastTick) return;
+  const visible = history.slice(-C.lookback);
+  const { lo, hi } = getPriceRange(visible);
+  const book    = lastTick.book;
+
+  drawBG(lo, hi);
+  drawHeatmap(book, lo, hi);
+  drawFootprint(agg.all(), lo, hi, C.lookback);
+  drawCandles(agg.all(), lo, hi, C.lookback);
+  drawTrail(visible, lo, hi);
+
+  // Draw footsteps for the last 10 ticks — newer = more opaque, giving persistence
+  const footWindow = 10;
+  const footStart  = Math.max(0, visible.length - footWindow);
+  for (let fi = footStart; fi < visible.length; fi++) {
+    const ageFrac  = (fi - footStart + 1) / footWindow;  // 0.1 → 1.0
+    drawFootsteps(visible[fi], lo, hi, visible.length, fi, ageFrac * 0.9);
+  }
+
+  drawComet(lastTick, lo, hi, visible.length);
+  drawTradeOverlay(lo, hi);
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI UPDATES
+// ═══════════════════════════════════════════════════════
+function fmtN(n, dec=2) {
+  const s = n.toFixed(dec);
+  return (n >= 0 ? '+' : '') + s;
+}
+
+function updateUI() {
+  if (!lastTick) return;
+  const t    = lastTick;
+  const prev = history[Math.max(0, history.length - 11)];
+  const diff = t.price - prev.price;
+
+  document.getElementById('hPrice').textContent = `$${t.price.toFixed(2)}`;
+  const dEl = document.getElementById('hDelta');
+  dEl.textContent = `${diff >= 0 ? '▲' : '▼'} ${diff >= 0 ? '+' : ''}$${Math.abs(diff).toFixed(2)}`;
+  dEl.className   = `price-delta ${diff >= 0 ? 'up' : 'down'}`;
+
+  const phaseEl  = document.getElementById('hPhase');
+  const absVel   = Math.abs(t.velocity);
+  const alerting = absVel >= C.alertVelocity;
+  if (t.phase === 'bull') {
+    phaseEl.textContent = alerting ? '🔥 SURGE UP' : '↑ Bull Momentum';
+    phaseEl.className   = 'phase-badge BULL';
+  } else if (t.phase === 'bear') {
+    phaseEl.textContent = alerting ? '⚡ CRASH DOWN' : '↓ Bear Momentum';
+    phaseEl.className   = 'phase-badge BEAR';
+  } else {
+    phaseEl.textContent = '— No Momentum';
+    phaseEl.className   = 'phase-badge FLAT';
+  }
+
+  document.getElementById('hudVel').textContent   = fmtN(t.velocity);
+  document.getElementById('hudAcc').textContent   = fmtN(t.accel);
+  document.getElementById('hudDelta').textContent = fmtN(t.delta, 0);
+
+  const vEl = document.getElementById('fVel');
+  vEl.textContent = `${fmtN(t.velocity)}/s`;
+  vEl.className   = `foot-val ${alerting ? 'warn' : t.velocity > 0 ? 'pos' : 'neg'}`;
+
+  const aEl = document.getElementById('fAcc');
+  aEl.textContent = fmtN(t.accel);
+  aEl.className   = `foot-val ${t.accel > 0 ? 'pos' : 'neg'}`;
+
+  const dEl2 = document.getElementById('fDelta');
+  dEl2.textContent = fmtN(t.delta, 0);
+  dEl2.className   = `foot-val ${t.delta > 0 ? 'pos' : 'neg'}`;
+
+  document.getElementById('fBuy').textContent  = Math.round(t.buyVol);
+  document.getElementById('fSell').textContent = Math.round(t.sellVol);
+
+  const maxVel = C.alertVelocity;
+  const pct2   = Math.min(50, (Math.abs(t.velocity) / maxVel) * 50);
+  const fill   = document.getElementById('velFill');
+  if (t.velocity > 0.2) {
+    fill.style.cssText = `left:50%;width:${pct2}%;background:var(--buy);box-shadow:0 0 8px var(--buy);`;
+  } else if (t.velocity < -0.2) {
+    fill.style.cssText = `left:${50-pct2}%;width:${pct2}%;background:var(--sell);box-shadow:0 0 8px var(--sell);`;
+  } else {
+    fill.style.cssText = `left:49%;width:2%;background:var(--flat);`;
+  }
+}
+
+// Footer tape
+function addTapeEntry(tick) {
+  const tape = document.getElementById('footerTape');
+  const side = tick.delta > 0 ? 'buy' : 'sell';
+  const lots = Math.abs(tick.delta).toFixed(0);
+  const row  = document.createElement('div');
+  row.className = `tape-row ${side}`;
+  row.innerHTML = `<span>$${tick.price.toFixed(1)}</span><span>${lots}</span>`;
+  tape.insertBefore(row, tape.firstChild);
+  while (tape.children.length > 5) tape.removeChild(tape.lastChild);
+}
+
+// ═══════════════════════════════════════════════════════
+//  PAUSE / PLAY
+// ═══════════════════════════════════════════════════════
+function togglePause() {
+  paused = !paused;
+  const btn = document.getElementById('pauseBtn');
+  btn.textContent = paused ? '▶ Resume' : '⏸ Pause';
+  btn.classList.toggle('active', paused);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+  if (e.code === 'KeyS')  applyPreset('sensitive');
+  if (e.code === 'KeyB')  applyPreset('balanced');
+  if (e.code === 'KeyF')  applyPreset('filtered');
+});
+
+// ═══════════════════════════════════════════════════════
+//  GAMIFICATION — XP, RANKS, ACHIEVEMENTS
+// ═══════════════════════════════════════════════════════
+const RANKS = [
+  { name:'REKT',   minBal:0,      icon:'💀' },
+  { name:'ROOKIE', minBal:5000,   icon:'🥉' },
+  { name:'TRADER', minBal:10000,  icon:'🥈' },
+  { name:'PRO',    minBal:25000,  icon:'🥇' },
+  { name:'ELITE',  minBal:50000,  icon:'💎' },
+  { name:'LEGEND', minBal:100000, icon:'👑' },
+];
+
+const ACHIEVEMENTS_DEF = {
+  first_trade:    { title:'First Blood',    desc:'Complete your first trade',      icon:'⚔️',  xp:50  },
+  first_profit:   { title:'In The Green',   desc:'Close a profitable trade',       icon:'🟢',  xp:75  },
+  yolo_mode:      { title:'YOLO Mode',      desc:'Trade at 40× leverage or above', icon:'🎰',  xp:100 },
+  win_streak_3:   { title:'Hat Trick',      desc:'Win 3 trades in a row',          icon:'🔥',  xp:150 },
+  battle_win:     { title:'Battle King',    desc:'Win a battle',                   icon:'👑',  xp:200 },
+  diamond_hands:  { title:'Diamond Hands',  desc:'Hold through a 5% drawdown',     icon:'💎',  xp:125 },
+  double_balance: { title:'Double or Nothing', desc:'Double your starting balance', icon:'💰', xp:300 },
+  whale:          { title:'Whale',          desc:'Reach $50,000 balance',          icon:'🐋',  xp:500 },
+};
+
+let xp            = 0;
+let level         = 1;
+let winStreak     = 0;
+let tradeCount    = 0;
+let unlockedAchs  = new Set();
+let oppBattlePnl  = 0;   // authoritative opponent P&L (avoids DOM sign-parsing)
+
+function getRank(balance) {
+  for (let i = RANKS.length - 1; i >= 0; i--) {
+    if (balance >= RANKS[i].minBal) return RANKS[i];
+  }
+  return RANKS[0];
+}
+
+function addXP(amount) {
+  xp += amount;
+  const newLevel = Math.floor(xp / 100) + 1;
+  const xpInLevel  = xp % 100;
+  if (newLevel > level) {
+    level = newLevel;
+    showAchievement('LEVEL UP!', `You reached Level ${level}`, 0);
+  }
+  document.getElementById('xpLevel').textContent = `Lv.${level}`;
+  document.getElementById('xpText').textContent  = `${xpInLevel} / 100 XP`;
+  document.getElementById('xpFill').style.width  = `${xpInLevel}%`;
+}
+
+function checkAchievement(key) {
+  if (unlockedAchs.has(key)) return;
+  const def = ACHIEVEMENTS_DEF[key];
+  if (!def) return;
+  unlockedAchs.add(key);
+  addXP(def.xp);
+  showAchievement(`${def.icon} ${def.title}`, def.desc, def.xp);
+}
+
+function showAchievement(title, desc, xpAmt) {
+  const c = document.getElementById('achievementContainer');
+  if (!c) return;
+  const toast = document.createElement('div');
+  toast.className = 'ach-toast';
+  toast.innerHTML = `
+    <div class="ach-icon" style="font-size:20px">${title.match(/[\u{1F300}-\u{1FFFF}]|[\u{2600}-\u{26FF}]/u)?.[0] ?? '⭐'}</div>
+    <div class="ach-body">
+      <div class="ach-title">${title.replace(/^[\u{1F300}-\u{1FFFF}]\s*/u,'')}</div>
+      <div class="ach-desc">${desc}</div>
+    </div>
+    ${xpAmt > 0 ? `<div class="ach-xp">+${xpAmt} XP</div>` : ''}
+  `;
+  c.appendChild(toast);
+  requestAnimationFrame(() => { requestAnimationFrame(() => toast.classList.add('show')); });
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 400);
+  }, 3800);
+}
+
+function updateRankDisplay() {
+  const rank = getRank(userBalance);
+  const badge = document.getElementById('rankBadge');
+  if (badge) {
+    badge.textContent = `${rank.icon} ${rank.name}`;
+    badge.className = `rank-badge rank-${rank.name}`;
+  }
+}
+
+function updateVsMeter() {
+  if (!trade.active) return;
+  const myPnl  = calcPnL(lastTick?.price ?? 0);
+  const oppPnl = oppBattlePnl;
+  const total  = Math.abs(myPnl) + Math.abs(oppPnl) || 1;
+  const myPct  = Math.max(5, Math.min(95, 50 + (myPnl / (total * 0.5)) * 45));
+  const oppPct = 100 - myPct;
+  const meBar  = document.getElementById('vsMeBar');
+  const oppBar = document.getElementById('vsOppBar');
+  if (meBar)  meBar.style.width  = `${myPct}%`;
+  if (oppBar) oppBar.style.width = `${oppPct}%`;
+  const myEl = document.getElementById('myBattlePnl');
+  if (myEl) {
+    myEl.textContent = `${myPnl>=0?'+':''}$${Math.abs(myPnl).toFixed(2)}`;
+    myEl.className = `opp-pnl ${myPnl>=0?'pos':'neg'}`;
+  }
+}
+
+function playAsGuest() {
+  onLoggedIn({ username: 'Guest', balance: 10000, wins: 0, losses: 0, total_pnl: 0, xp: 0 });
+}
+
+async function loadLoginLeaderboard() {
+  try {
+    const rows = await api('GET', '/leaderboard', null);
+    const el = document.getElementById('loginLeaderboard');
+    if (!el || !rows || !rows.length) return;
+    el.innerHTML = rows.slice(0, 5).map(r => `
+      <div class="login-top-row">
+        <span class="login-top-name">${r.username}</span>
+        <span class="login-top-bal">$${Number(r.balance).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+      </div>
+    `).join('');
+  } catch(e) { /* server may be offline */ }
+}
+loadLoginLeaderboard();
+
+// ═══════════════════════════════════════════════════════
+//  LEADERBOARD MODAL
+// ═══════════════════════════════════════════════════════
+async function openLb() {
+  document.getElementById('lbModal').classList.add('visible');
+  const el = document.getElementById('lbRows');
+  el.innerHTML = '<div class="lb-loading">Loading…</div>';
+  try {
+    const rows = await api('GET', '/leaderboard', null);
+    if (!rows || !rows.length) {
+      el.innerHTML = '<div class="lb-loading">No traders yet — be the first!</div>';
+      return;
+    }
+    const medals = ['🥇','🥈','🥉'];
+    el.innerHTML = rows.map((r, i) => {
+      const isMe = r.username === currentUser?.username;
+      const rank = _rank_name(r.balance);
+      const rankColor = {
+        REKT:'var(--rank-rekt)', ROOKIE:'var(--rank-rookie)', TRADER:'var(--rank-trader)',
+        PRO:'var(--rank-pro)', ELITE:'var(--rank-elite)', LEGEND:'var(--rank-legend)',
+      }[rank] ?? 'var(--dim)';
+      return `
+        <div class="lb-row${isMe?' me':''}">
+          <span class="lb-rank">${medals[i] ?? (i+1)}</span>
+          <span class="lb-name">${r.username}${isMe ? ' <span style="color:var(--buy);font-size:9px;">YOU</span>' : ''}</span>
+          <span class="lb-bal">$${Number(r.balance).toLocaleString('en-US',{maximumFractionDigits:0})}</span>
+          <span class="lb-badge" style="color:${rankColor};border-color:${rankColor}">${rank}</span>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="lb-loading">Server offline — start battle_server.py</div>';
+  }
+}
+
+function closeLb() {
+  document.getElementById('lbModal').classList.remove('visible');
+}
+
+// Close on backdrop click
+document.getElementById('lbModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('lbModal')) closeLb();
+});
+
+// Helper matching server-side _rank_name
+function _rank_name(bal) {
+  if (bal >= 100000) return 'LEGEND';
+  if (bal >= 50000)  return 'ELITE';
+  if (bal >= 25000)  return 'PRO';
+  if (bal >= 10000)  return 'TRADER';
+  if (bal >= 5000)   return 'ROOKIE';
+  return 'REKT';
+}
+
+// ═══════════════════════════════════════════════════════
+//  BATTLE SYSTEM
+// ═══════════════════════════════════════════════════════
+const API = 'http://localhost:8607';
+let currentUser   = null;   // {username, balance, wins, losses}
+let currentBattle = null;   // {room_code, opponent}
+let battleWs      = null;
+let userBalance   = 10000;
+
+// ── Auth ──────────────────────────────────────────────
+async function doLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  setLoginErr('');
+  try {
+    const r = await api('POST', '/login', { username: u, password: p });
+    onLoggedIn(r);
+  } catch(e) { setLoginErr(e.message); }
+}
+
+async function doRegister() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  setLoginErr('');
+  if (!u || !p) return setLoginErr('Enter a username and password');
+  try {
+    const r = await api('POST', '/register', { username: u, password: p });
+    onLoggedIn(r);
+  } catch(e) { setLoginErr(e.message); }
+}
+
+function onLoggedIn(r) {
+  currentUser = r;
+  userBalance = r.balance;
+  document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('hdrUser').style.display = 'flex';
+  document.getElementById('hdrUsername').textContent = r.username;
+  updateBalanceDisplay();
+  document.getElementById('xpSection').style.display = 'flex';
+  xp = r.xp || 0;
+  level = Math.floor(xp / 100) + 1; // sync level before addXP so no false level-up toast
+  addXP(0); // refresh XP display
+  updateRankDisplay();
+}
+
+function setLoginErr(msg) {
+  document.getElementById('loginErr').textContent = msg;
+}
+
+function updateBalanceDisplay() {
+  document.getElementById('hdrBalance').textContent =
+    '$' + userBalance.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  refreshSizeDisplay();
+}
+
+// ── Battle controls ───────────────────────────────────
+async function createBattle() {
+  if (!currentUser) return;
+  try {
+    const r = await api('POST', '/battle/create', { username: currentUser.username });
+    currentBattle = { room_code: r.room_code, opponent: null };
+    showBattleWaiting(r.room_code);
+    connectBattleWs(r.room_code);
+  } catch(e) { alert(e.message); }
+}
+
+async function joinBattle() {
+  if (!currentUser) return;
+  const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+  if (!code) return;
+  try {
+    const r = await api('POST', '/battle/join', { username: currentUser.username, room_code: code });
+    currentBattle = { room_code: r.room_code, opponent: r.opponent };
+    showBattleActive(r.opponent);
+    connectBattleWs(r.room_code);
+  } catch(e) { alert(e.message); }
+}
+
+async function endBattle() {
+  if (!currentBattle || !currentUser) return;
+  const pnl = trade.active ? calcPnL(lastTick?.price ?? 0) : 0;
+  if (trade.active) closeTrade();
+  try {
+    const r = await api('POST', '/battle/resolve', {
+      room_code: currentBattle.room_code,
+      username:  currentUser.username,
+      pnl,
+    });
+    if (r.winner) showBattleResult(r);
+  } catch(e) { alert(e.message); }
+}
+
+// ── Battle UI states ──────────────────────────────────
+function showBattleWaiting(code) {
+  document.getElementById('battleLobby').style.display   = 'none';
+  document.getElementById('battleWaiting').style.display = 'flex';
+  document.getElementById('battleActive').style.display  = 'none';
+  document.getElementById('battleRoomCode').textContent  = code;
+  document.getElementById('battleStatusMsg').textContent = 'Waiting for opponent…';
+}
+
+function showBattleActive(opponentName) {
+  document.getElementById('battleLobby').style.display   = 'none';
+  document.getElementById('battleWaiting').style.display = 'none';
+  document.getElementById('battleActive').style.display  = 'flex';
+  document.getElementById('oppName').textContent = opponentName ?? '—';
+}
+
+function showBattleLobby() {
+  document.getElementById('battleLobby').style.display   = 'block';
+  document.getElementById('battleWaiting').style.display = 'none';
+  document.getElementById('battleActive').style.display  = 'none';
+  currentBattle  = null;
+  oppBattlePnl   = 0;
+}
+
+function showBattleResult(r) {
+  const isWinner = r.winner === currentUser?.username;
+  const p1 = r.p1, p2 = r.p2;
+  const myPnl  = [p1,p2].find(p=>p.username===currentUser?.username)?.pnl ?? 0;
+  const oppPnl = [p1,p2].find(p=>p.username!==currentUser?.username)?.pnl ?? 0;
+
+  // Update local balance + achievements
+  if (isWinner) {
+    userBalance += r.prize;
+    updateBalanceDisplay();
+    checkAchievement('battle_win');
+    addXP(50);   // bonus XP for battle win
+  }
+
+  const box = document.getElementById('battleResultBox');
+  box.style.border = isWinner
+    ? '1px solid var(--buy)'   : '1px solid var(--sell)';
+  box.innerHTML = `
+    <div class="br-title">${isWinner ? '🏆 You Won!' : '💀 You Lost'}</div>
+    <div class="br-winner">${r.winner}</div>
+    ${isWinner ? `<div class="br-prize">+$${r.prize.toLocaleString('en-US',{minimumFractionDigits:2})}</div>` : ''}
+    <div class="br-sub">${isWinner ? "Prize = sum of both players' profits" : "Better luck next battle"}</div>
+    <div class="br-scores">
+      <div class="br-score">
+        <div class="br-score-name">${p1.username}</div>
+        <div class="br-score-val" style="color:${p1.pnl>=0?'var(--buy)':'var(--sell)'}">
+          ${p1.pnl>=0?'+':''}$${Math.abs(p1.pnl).toFixed(2)}
+        </div>
+      </div>
+      <div class="br-score">
+        <div class="br-score-name">${p2?.username??'—'}</div>
+        <div class="br-score-val" style="color:${(p2?.pnl??0)>=0?'var(--buy)':'var(--sell)'}">
+          ${(p2?.pnl??0)>=0?'+':''}$${Math.abs(p2?.pnl??0).toFixed(2)}
+        </div>
+      </div>
+    </div>
+    <button class="battle-btn create" style="margin-top:4px" onclick="dismissBattleResult()">Play Again</button>
+  `;
+  document.getElementById('battleResultModal').classList.add('visible');
+  battleWs?.close();
+  battleWs = null;
+  showBattleLobby();
+}
+
+function dismissBattleResult() {
+  document.getElementById('battleResultModal').classList.remove('visible');
+}
+
+// ── WebSocket ─────────────────────────────────────────
+function connectBattleWs(room) {
+  if (!currentUser) return;
+  battleWs?.close();
+  battleWs = new WebSocket(`ws://localhost:8607/ws/${room}/${currentUser.username}`);
+
+  battleWs.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'opponent_joined') {
+      currentBattle.opponent = msg.username;
+      showBattleActive(msg.username);
+    }
+    if (msg.type === 'opponent_update') {
+      oppBattlePnl = msg.pnl ?? 0;
+      const pos = oppBattlePnl >= 0;
+      document.getElementById('oppPnl').textContent  = `${pos?'+':''}$${Math.abs(oppBattlePnl).toFixed(2)}`;
+      document.getElementById('oppPnl').className    = `opp-pnl ${pos?'pos':'neg'}`;
+      const oppRoeEl = document.getElementById('oppRoe');
+      if (oppRoeEl) oppRoeEl.textContent = `${pos?'+':''}${(msg.roe??0).toFixed(2)}%`;
+      document.getElementById('oppSide').textContent = msg.side
+        ? `${msg.side==='long'?'▲ Long':'▼ Short'} @ $${(msg.entry??0).toFixed(1)} · ${msg.lev??1}×`
+        : 'No trade open';
+    }
+    if (msg.type === 'battle_result') showBattleResult(msg);
+    if (msg.type === 'opponent_left') {
+      document.getElementById('oppSide').textContent = 'Opponent disconnected';
+    }
+  };
+  battleWs.onerror = () => {};
+}
+
+function sendBattleUpdate() {
+  if (!battleWs || battleWs.readyState !== WebSocket.OPEN || !currentUser) return;
+  const pnl = trade.active ? calcPnL(lastTick?.price ?? 0) : 0;
+  const roe = (pnl / trade.size) * 100;
+  battleWs.send(JSON.stringify({
+    pnl, roe,
+    side:  trade.active ? trade.side  : null,
+    entry: trade.active ? trade.entryPrice : null,
+    lev:   trade.leverage,
+    ready: trade.active,
+  }));
+}
+
+// ── Generic API helper ────────────────────────────────
+async function api(method, path, body) {
+  const res = await fetch(API + path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail ?? 'Request failed');
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════
+//  TRADE SYSTEM
+// ═══════════════════════════════════════════════════════
+const trade = {
+  active: false, side: null,
+  entryPrice: 0, leverage: 1,
+  size: 1000,    openTime: null,
+  liqPrice: 0,
+};
+
+// Linear 1–50 (matches Hyperliquid real max for BTC)
+function sliderToLev(v) { return Math.max(1, Math.min(50, Math.round(parseFloat(v)))); }
+
+let riskPct = 10;   // % of balance per trade
+
+function onRiskChange(val) {
+  riskPct = Math.max(1, Math.min(100, parseInt(val)));
+  document.getElementById('riskPctDisplay').textContent = `${riskPct}%`;
+  refreshSizeDisplay();
+}
+
+function refreshSizeDisplay() {
+  trade.size = Math.max(1, (userBalance * riskPct / 100));
+  const notional = (trade.size * trade.leverage).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  document.getElementById('sizeDisplay').textContent   = `$${trade.size.toLocaleString('en-US', {maximumFractionDigits:0})}`;
+  document.getElementById('notionalDisplay').textContent = `$${notional}`;
+}
+
+function fmtLev(n) { return `${n}×`; }
+
+function levClass(n) {
+  if (n >= 40) return 'max';
+  if (n >= 20) return 'high';
+  if (n >= 10) return 'mid';
+  return 'low';
+}
+
+function onLevChange(val) {
+  const lev = sliderToLev(val);
+  trade.leverage = lev;
+  const el = document.getElementById('levDisplay');
+  el.textContent = fmtLev(lev);
+  el.className   = `lev-val ${levClass(lev)}`;
+  refreshSizeDisplay();
+}
+
+function openTrade(side) {
+  if (!lastTick) return;
+  trade.active     = true;
+  trade.side       = side;
+  trade.entryPrice = lastTick.price;
+  trade.openTime   = Date.now();
+
+  // Lock buttons, show P&L + close
+  document.getElementById('longBtn').disabled  = true;
+  document.getElementById('shortBtn').disabled = true;
+  document.getElementById('pnlPanel').classList.add('visible');
+  document.getElementById('closeBtn').classList.add('visible');
+
+  const sideEl = document.getElementById('tradeSide');
+  sideEl.textContent = side === 'long' ? '▲ LONG' : '▼ SHORT';
+  sideEl.style.color = side === 'long' ? 'var(--buy)' : 'var(--sell)';
+  document.getElementById('tradeEntry').textContent = `$${trade.entryPrice.toFixed(2)}`;
+
+  const liqPct = 1 / trade.leverage * 0.9;
+  const liqPrice = side === 'long'
+    ? trade.entryPrice * (1 - liqPct)
+    : trade.entryPrice * (1 + liqPct);
+  document.getElementById('tradeLiq').textContent = `$${liqPrice.toFixed(2)}`;
+  trade.liqPrice = liqPrice;
+}
+
+function closeTrade() {
+  if (!lastTick || !trade.active) return;
+  const pnl = calcPnL(lastTick.price);
+  const roe = (pnl / trade.size * 100).toFixed(2);
+  const win = pnl >= 0;
+
+  // Apply to balance — refreshSizeDisplay is called inside updateBalanceDisplay
+  userBalance = Math.max(0, userBalance + pnl);
+  updateBalanceDisplay();
+
+  // Gamification — achievement checks after balance update
+  tradeCount++;
+  if (tradeCount === 1) checkAchievement('first_trade');
+  if (pnl > 0) {
+    winStreak++;
+    checkAchievement('first_profit');
+    addXP(20 + Math.floor(Math.abs(parseFloat(roe)) * 2));
+    if (winStreak >= 3) checkAchievement('win_streak_3');
+  } else {
+    winStreak = 0;
+  }
+  if (trade.leverage >= 40) checkAchievement('yolo_mode');
+  if (userBalance >= 20000) checkAchievement('double_balance');
+  if (userBalance >= 50000) checkAchievement('whale');
+  updateRankDisplay();
+
+  // Flash result
+  const res = document.getElementById('tradeResult');
+  res.className = win ? 'win' : 'loss';
+  res.innerHTML = `
+    <div class="result-label">${win ? '🏆 WIN' : '💀 LOSS'}</div>
+    <div class="result-amount ${win ? 'pos' : 'neg'}">${win ? '+' : ''}$${Math.abs(pnl).toFixed(2)}</div>
+    <div style="font-size:11px;opacity:0.6;">${win?'+':''}${roe}% ROE</div>
+  `;
+  setTimeout(() => { res.className = ''; res.innerHTML = ''; }, 1900);
+
+  // Reset state
+  trade.active = false; trade.side = null;
+  document.getElementById('longBtn').disabled  = false;
+  document.getElementById('shortBtn').disabled = false;
+  document.getElementById('pnlPanel').classList.remove('visible');
+  document.getElementById('closeBtn').classList.remove('visible');
+}
+
+function calcPnL(currentPrice) {
+  if (!trade.active) return 0;
+  const move = (currentPrice - trade.entryPrice) / trade.entryPrice;
+  const dir  = trade.side === 'long' ? 1 : -1;
+  return dir * move * trade.leverage * trade.size;
+}
+
+function updatePnL() {
+  if (!trade.active || !lastTick) return;
+  const pnl  = calcPnL(lastTick.price);
+  const roe  = (pnl / trade.size * 100);
+  const pos  = pnl >= 0;
+
+  const roeEl = document.getElementById('tradeROE');
+  roeEl.textContent = `${pos?'+':''}${roe.toFixed(2)}%`;
+  roeEl.className   = `pnl-roe ${pos ? 'pos' : 'neg'}`;
+
+  const pnlEl = document.getElementById('tradePnl');
+  pnlEl.textContent = `${pos?'+':''}$${Math.abs(pnl).toFixed(2)}`;
+  pnlEl.className   = `pnl-num ${pos ? 'pos' : 'neg'}`;
+
+  // Diamond Hands achievement — held through ≥5% drawdown
+  if (roe <= -5) checkAchievement('diamond_hands');
+
+  // Auto-liquidate if beyond liq price
+  const liqHit = trade.side === 'long'
+    ? lastTick.price <= trade.liqPrice
+    : lastTick.price >= trade.liqPrice;
+  if (liqHit) {
+    roeEl.textContent = '-100.00%';
+    roeEl.className   = 'pnl-roe neg';
+    pnlEl.textContent = `-$${trade.size.toFixed(2)}`;
+    setTimeout(() => { closeTrade(); }, 400);
+  }
+  sendBattleUpdate();
+  updateVsMeter();
+}
+
+// ── Draw entry + liquidation lines on chart ──
+function drawTradeOverlay(lo, hi) {
+  if (!trade.active) return;
+  const W  = canvas.width - PAD.l - PAD.r;
+  const x0 = PAD.l, x1 = PAD.l + W;
+  const t  = Date.now() / 500;
+
+  function dashLine(price, color, label, alpha) {
+    if (price < lo || price > hi) return;
+    const y = toY(price, lo, hi);
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1.5;
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = color;
+    ctx.shadowBlur  = 8;
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    ctx.setLineDash([]);
+    // Label
+    ctx.globalAlpha = alpha;
+    ctx.font        = 'bold 10px "JetBrains Mono",monospace';
+    ctx.fillStyle   = color;
+    ctx.textAlign   = 'left';
+    ctx.shadowBlur  = 0;
+    ctx.fillText(label, x0 + 4, y - 4);
+    ctx.restore();
+  }
+
+  const isLong = trade.side === 'long';
+  const entCol = isLong ? '#00e5a0' : '#ff3366';
+
+  // Entry line
+  dashLine(trade.entryPrice, entCol, `ENTRY $${trade.entryPrice.toFixed(1)}`, 0.8);
+
+  // Liquidation line — pulses when close
+  const dist     = Math.abs(lastTick?.price - trade.liqPrice) / trade.entryPrice;
+  const liqAlpha = dist < 0.005 ? 0.5 + 0.5 * Math.sin(t * 4) : 0.55;
+  dashLine(trade.liqPrice, '#ff3366', `LIQ $${trade.liqPrice.toFixed(1)}`, liqAlpha);
+
+  // Current P&L floating label near comet
+  if (!lastTick) return;
+  const pnl  = calcPnL(lastTick.price);
+  const pos  = pnl >= 0;
+  const cy   = toY(lastTick.price, lo, hi);
+  const cx   = PAD.l + W;
+  ctx.save();
+  ctx.font      = 'bold 13px "JetBrains Mono",monospace';
+  ctx.fillStyle = pos ? '#00e5a0' : '#ff3366';
+  ctx.textAlign = 'right';
+  ctx.shadowColor = pos ? '#00e5a0' : '#ff3366';
+  ctx.shadowBlur  = 12;
+  ctx.fillText(`${pos?'+':''}$${Math.abs(pnl).toFixed(0)}`, cx - 6, cy - 14);
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════
+//  TICK LOOP (1 second) — SIM only
+// ═══════════════════════════════════════════════════════
+setInterval(() => {
+  if (!simReady || paused || liveMode) return;
+  const tick = sim.tick();
+  history.push(tick);
+  if (history.length > 500) history.shift();
+  agg.push(tick);
+  lastTick = tick;
+  updateUI();
+  updatePnL();
+  addTapeEntry(tick);
+}, 1000);
+
+// ═══════════════════════════════════════════════════════
+//  ANIMATION LOOP (60fps)
+// ═══════════════════════════════════════════════════════
+function animate() {
+  render();
+  requestAnimationFrame(animate);
+}
+
+// ═══════════════════════════════════════════════════════
+//  BOOTSTRAP — fetch real price then start sim
+// ═══════════════════════════════════════════════════════
+(async () => {
+  const coin       = (C.liveCoin || 'BTC').toUpperCase();
+  const startPrice = await fetchCurrentPrice(coin);
+  document.getElementById('hPrice').textContent = `$${startPrice.toFixed(2)}`;
+
+  sim = new PriceSimulator(startPrice);
+  for (let i = 0; i < 80; i++) {
+    const t = sim.tick();
+    history.push(t);
+    agg.push(t);
+  }
+  lastTick = history[history.length - 1];
+  simReady = true;
+
+  // Auto-connect live if config says so
+  if (C.liveMode) setTimeout(() => toggleLiveMode(), 50);
+
+  updateUI();
+})();
+
+animate();
+</script>
+</body>
+</html>
